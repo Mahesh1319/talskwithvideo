@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "346527519468",
+    "project_id": "talkwithvideo-f2765",
+    "storage_bucket": "talkwithvideo-f2765.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:346527519468:android:81f6ec1ce9ba6422960bc9",
+        "android_client_info": {
+          "package_name": "com.talkwithvideo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA3B7Im2zNhjS73WZMXtX-UNuc-YH_zy6M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
