@@ -11,6 +11,7 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 apply plugin: "com.google.gms.google-services"
+apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -99,6 +100,7 @@ dependencies {
     // Firebase BOM for managing Firebase dependencies
     implementation platform('com.google.firebase:firebase-bom:33.13.0')
     implementation 'com.google.firebase:firebase-analytics'
+    implementation project(':react-native-vector-icons')
 
     // Conditional Hermes or JSC implementation
     if (hermesEnabled.toBoolean()) {

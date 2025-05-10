@@ -69,39 +69,69 @@ const HomeScreen = ({ navigation }) => {
     fetchUsers();
   }, []);
 
-  const startCall = async (calleeId) => {
-    try {
-      setLoading(true);
-      const callerId = auth().currentUser?.uid;
-      if (!callerId) throw new Error("Not authenticated");
+//   const startCall = async (calleeId) => {
+//     try {
+//       setLoading(true);
+//       const callerId = auth().currentUser?.uid;
+//       if (!callerId) throw new Error("Not authenticated");
 
-      const callDoc = firestore().collection('calls').doc();
+//       const callDoc = firestore().collection('calls').doc();
       
-      await callDoc.set({
-        callerId,
-        calleeId,
-        callId: callDoc.id,
-        status: 'calling',
-        participants: [callerId, calleeId],
-        iceCandidates: [],
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        updatedAt: firestore.FieldValue.serverTimestamp()
-      });
+//       await callDoc.set({
+//         callerId,
+//         calleeId,
+//         callId: callDoc.id,
+//         status: 'calling',
+//         participants: [callerId, calleeId],
+//         iceCandidates: [],
+//         createdAt: firestore.FieldValue.serverTimestamp(),
+//         updatedAt: firestore.FieldValue.serverTimestamp()
+//       });
 
-      navigation.navigate('Call', {
-        callId: callDoc.id,
-        callerId,
-        calleeId,
-        isCaller: true,
-      });
-    } catch (err) {
-      console.error("Call start error:", err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+//       navigation.navigate('Call', {
+//         callId: callDoc.id,
+//         callerId,
+//         calleeId,
+//         isCaller: true,
+//       });
+//     } catch (err) {
+//       console.error("Call start error:", err);
+//       setError(err.message);
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
 
+
+// Update the startCall function:
+const startCall = async (calleeId) => {
+  try {
+    const callerId = auth().currentUser?.uid;
+    if (!callerId) throw new Error("Please login first");
+
+    const callDoc = firestore().collection('calls').doc();
+    
+    await callDoc.set({
+      callerId,
+      calleeId,
+      callId: callDoc.id,
+      status: 'calling',
+      participants: [callerId, calleeId], // Critical for permission
+      iceCandidates: [],
+      createdAt: firestore.FieldValue.serverTimestamp()
+    });
+
+    navigation.navigate('Call', {
+      callId: callDoc.id,
+      callerId,
+      calleeId,
+      isCaller: true,
+    });
+  } catch (err) {
+    console.error("Call creation failed:", err);
+    alert(`Error: ${err.message}\n\nEnsure you have permission to start calls.`);
+  }
+};
   const joinCall = () => {
     if (!callId.trim()) {
       setError('Please enter a valid Call ID');

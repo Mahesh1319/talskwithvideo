@@ -5,6 +5,7 @@ import {
     mediaDevices,
 } from 'react-native-webrtc';
 import { firestore } from './firebase';
+import { handleFirestoreError } from '../utils/errorHandler';
 
 const iceServers = [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -67,6 +68,26 @@ class WebRTCService {
         this.peerConnections[peerId] = pc;
         return pc;
     };
+
+    // Update the createOffer method:
+    async createOffer() {
+        try {
+            const offer = await this.pc.createOffer();
+            await this.pc.setLocalDescription(offer);
+
+            await firestore()
+                .collection('calls')
+                .doc(this.currentCallId)
+                .update({
+                    offer: JSON.stringify(offer),
+                    participants: [this.callerId, this.calleeId], // Ensure participants exist
+                    updatedAt: firestore.FieldValue.serverTimestamp()
+                });
+        } catch (err) {
+            console.error("Offer creation failed:", err);
+            throw new Error("Failed to create offer. Check Firestore permissions.");
+        }
+    }
 
     // Start call as broadcaster
     startCall = async (peerId) => {
