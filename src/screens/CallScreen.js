@@ -1,232 +1,286 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, Clipboard } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, Dimensions } from 'react-native';
 import { RTCView } from 'react-native-webrtc';
 import { firestore, auth } from '../services/firebase';
 import WebRTCService from '../services/WebRTCService';
-import CallControls from '../components/CallControls';
-import { handleFirestoreError } from '../utils/errorHandler';
-import SignalingInput from '../components/SignalingInput';
+import Icon from 'react-native-vector-icons/FontAwesome';
 
 const CallScreen = ({ route, navigation }) => {
-    const { callId, isCaller } = route.params;
+    const { callId, callerId, calleeId, isCaller, callerEmail, calleeEmail } = route.params;
     const [localStream, setLocalStream] = useState(null);
-    const [remoteStreams, setRemoteStreams] = useState([]);
-    const [callStatus, setCallStatus] = useState(isCaller ? 'Ready to start' : 'Ready to join');
-    const [signalingData, setSignalingData] = useState('');
-    const [activePeer, setActivePeer] = useState(null);
-    const webrtc = useRef(WebRTCService);
+    const [remoteStream, setRemoteStream] = useState(null);
+    const [status, setStatus] = useState(isCaller ? 'Calling...' : 'Joining...');
+    const [callDuration, setCallDuration] = useState(0);
+    const [isMuted, setIsMuted] = useState(false);
+    const [isVideoOn, setIsVideoOn] = useState(true);
+    const webrtc = useRef(null);
+    const intervalRef = useRef(null);
 
-    // Initialize call
+    const endCall = async () => {
+        try {
+            // Update call status
+            await firestore()
+                .collection('calls')
+                .doc(callId)
+                .update({
+                    status: 'ended',
+                    endedAt: firestore.FieldValue.serverTimestamp(),
+                    duration: callDuration
+                });
+
+            // Clean up WebRTC
+            if (webrtc.current) {
+                webrtc.current.cleanup();
+            }
+
+            // Navigate back
+            navigation.goBack();
+        } catch (err) {
+            console.error('Error ending call:', err);
+        }
+    };
+
+    const toggleMute = () => {
+        if (localStream) {
+            const audioTracks = localStream.getAudioTracks();
+            audioTracks.forEach(track => {
+                track.enabled = !track.enabled;
+            });
+            setIsMuted(!isMuted);
+        }
+    };
+
+    const toggleVideo = () => {
+        if (localStream) {
+            const videoTracks = localStream.getVideoTracks();
+            videoTracks.forEach(track => {
+                track.enabled = !track.enabled;
+            });
+            setIsVideoOn(!isVideoOn);
+        }
+    };
+
     useEffect(() => {
+        // Start timer
+        intervalRef.current = setInterval(() => {
+            setCallDuration(prev => prev + 1);
+        }, 1000);
+
+        return () => {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        webrtc.current = WebRTCService;
+
         const initializeCall = async () => {
             try {
-                // Get local media stream
-                const stream = await webrtc.current.initLocalStream();
+                // Initialize WebRTC
+                const stream = await webrtc.current.initialize(callId, callerId, calleeId, isCaller);
                 setLocalStream(stream);
 
-                // Set current call ID
-                webrtc.current.currentCallId = callId;
-
-                // Listen for remote stream updates
-                webrtc.current.remoteStreams = [];
-                const interval = setInterval(() => {
-                    if (webrtc.current.remoteStreams.length !== remoteStreams.length) {
-                        setRemoteStreams([...webrtc.current.remoteStreams]);
+                // Listen for remote stream
+                const remoteInterval = setInterval(() => {
+                    if (webrtc.current.remoteStream) {
+                        setRemoteStream(webrtc.current.remoteStream);
+                        setStatus('Connected');
                     }
                 }, 1000);
 
-                // If caller, automatically set as active peer
+                // Caller creates offer
                 if (isCaller) {
-                    setActivePeer(`participant_${Date.now()}`);
+                    await webrtc.current.createOffer();
                 }
 
-                return () => clearInterval(interval);
+                // Listen for call updates
+                const unsubscribe = firestore()
+                    .collection('calls')
+                    .doc(callId)
+                    .onSnapshot(async (doc) => {
+                        const data = doc.data();
+
+                        // Check if call was rejected or ended
+                        if (data?.status === 'rejected') {
+                            Alert.alert('Call Rejected', 'The other user rejected your call', [
+                                { text: 'OK', onPress: () => navigation.goBack() }
+                            ]);
+                            return;
+                        }
+
+                        if (data?.status === 'ended') {
+                            Alert.alert('Call Ended', 'The other user has ended the call', [
+                                { text: 'OK', onPress: () => navigation.goBack() }
+                            ]);
+                            return;
+                        }
+
+                        // Callee handles offer
+                        if (!isCaller && data.offer) {
+                            await webrtc.current.createAnswer(data.offer);
+                        }
+
+                        // Handle ICE candidates
+                        if (data.iceCandidates) {
+                            data.iceCandidates.forEach(candidate => {
+                                webrtc.current.addICECandidate(candidate);
+                            });
+                        }
+                    });
+
+                return () => {
+                    clearInterval(remoteInterval);
+                    unsubscribe();
+                };
             } catch (err) {
-                console.error('Call initialization failed:', err);
-                setCallStatus('Initialization failed');
+                console.error('Call failed:', err);
+                Alert.alert('Call Error', err.message);
+                navigation.goBack();
             }
         };
 
         initializeCall();
 
         return () => {
-            webrtc.current.cleanup();
-        };
-    }, [callId, isCaller]);
-
-    // Start call as broadcaster
-    const handleStartCall = async () => {
-        try {
-            setCallStatus('Creating offer...');
-            console.log("activePeer====>",activePeer);
-            const offer = await webrtc.current.startCall(activePeer);
-            setSignalingData(JSON.stringify(offer));
-            setCallStatus('Offer created - ready to connect');
-        } catch (err) {
-            console.error('Error starting call:', err);
-            setCallStatus('Error starting call');
-            Alert.alert("Call Failed", handleFirestoreError(err));
-        }
-    };
-
-    // Join call as participant
-    const handleJoinCall = async () => {
-        try {
-            if (!signalingData) {
-                throw new Error('No offer data to join with');
+            if (webrtc.current) {
+                webrtc.current.cleanup();
             }
+        };
+    }, [callId, callerId, calleeId, isCaller, navigation]);
 
-            setCallStatus('Creating answer...');
-            const answer = await webrtc.current.joinCall(activePeer, signalingData);
-            setSignalingData(JSON.stringify(answer));
-            setCallStatus('Connected');
-        } catch (err) {
-            console.error('Error joining call:', err);
-            setCallStatus('Error joining call');
-        }
-    };
-
-    // Hang up call
-    const handleHangUp = async () => {
-        try {
-            await webrtc.current.hangUp(activePeer);
-            setCallStatus('Call ended');
-            setRemoteStreams([]);
-            navigation.goBack();
-        } catch (err) {
-            console.error('Error hanging up:', err);
-        }
-    };
-
-    // Copy offer/answer to clipboard
-    const handleCopyOffer = () => {
-        Clipboard.setString(signalingData);
-        alert('Copied to clipboard!');
-    };
-
-    // Paste offer from clipboard
-    const handlePasteOffer = async () => {
-        const text = await Clipboard.getString();
-        setSignalingData(text);
+    const formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     };
 
     return (
         <View style={styles.container}>
-            {/* Video Streams */}
-            <ScrollView contentContainerStyle={styles.streamsContainer}>
-                {/* Local Stream */}
-                {localStream && (
-                    <View style={styles.streamWrapper}>
-                        <RTCView
-                            streamURL={localStream.toURL()}
-                            style={styles.stream}
-                            objectFit="cover"
-                            mirror={true}
-                        />
-                        <Text style={styles.streamLabel}>You</Text>
-                    </View>
+            {remoteStream ? (
+                <RTCView
+                    streamURL={remoteStream.toURL()}
+                    style={styles.remoteVideo}
+                    objectFit="cover"
+                />
+            ) : (
+                <View style={styles.remoteVideoPlaceholder}>
+                    <Icon name="user" size={100} color="#666" />
+                    <Text style={styles.placeholderText}>
+                        {isCaller ? `Calling ${calleeEmail}` : `Call from ${callerEmail}`}
+                    </Text>
+                </View>
+            )}
+
+            {localStream && (
+                <RTCView
+                    streamURL={localStream.toURL()}
+                    style={styles.localVideo}
+                    objectFit="cover"
+                    mirror={true}
+                />
+            )}
+
+            <View style={styles.statusBar}>
+                <Text style={styles.statusText}>{status}</Text>
+                {status === 'Connected' && (
+                    <Text style={styles.durationText}>{formatTime(callDuration)}</Text>
                 )}
+            </View>
 
-                {/* Remote Streams */}
-                {remoteStreams.map((stream, index) => (
-                    <View key={index} style={styles.streamWrapper}>
-                        <RTCView
-                            streamURL={stream.toURL()}
-                            style={styles.stream}
-                            objectFit="cover"
-                        />
-                        <Text style={styles.streamLabel}>Participant {index + 1}</Text>
-                    </View>
-                ))}
+            <View style={styles.controls}>
+                <TouchableOpacity style={styles.controlButton} onPress={toggleMute}>
+                    <Icon name={isMuted ? "microphone-slash" : "microphone"} size={30} color="white" />
+                    <Text style={styles.controlText}>{isMuted ? "Unmute" : "Mute"}</Text>
+                </TouchableOpacity>
 
-                {/* Instructions */}
-                {remoteStreams.length === 0 && (
-                    <View style={styles.instructions}>
-                        <Text style={styles.instructionTitle}>How to connect:</Text>
-                        {isCaller ? (
-                            <>
-                                <Text style={styles.instructionText}>1. Click "Start Call"</Text>
-                                <Text style={styles.instructionText}>2. Copy the offer and send it</Text>
-                                <Text style={styles.instructionText}>3. Wait for participant to join</Text>
-                            </>
-                        ) : (
-                            <>
-                                <Text style={styles.instructionText}>1. Paste the offer you received</Text>
-                                <Text style={styles.instructionText}>2. Click "Join Call"</Text>
-                                <Text style={styles.instructionText}>3. Send the answer back</Text>
-                            </>
-                        )}
-                    </View>
-                )}
-            </ScrollView>
+                <TouchableOpacity 
+                    style={[styles.controlButton, { backgroundColor: '#ff3b30' }]} 
+                    onPress={endCall}
+                >
+                    <Icon name="phone" size={30} color="white" />
+                    <Text style={styles.controlText}>End</Text>
+                </TouchableOpacity>
 
-            {/* Signaling Data Input */}
-            <SignalingInput
-                value={signalingData}
-                onChangeText={setSignalingData}
-                placeholder={isCaller ? "Offer will appear here..." : "Paste offer here..."}
-            />
-
-            {/* Call Controls */}
-            <CallControls
-                onStartCall={handleStartCall}
-                onJoinCall={handleJoinCall}
-                onHangUp={handleHangUp}
-                onCopyOffer={handleCopyOffer}
-                onPasteOffer={handlePasteOffer}
-                callStatus={callStatus}
-                localStream={localStream}
-                isCaller={isCaller}
-            />
+                <TouchableOpacity style={styles.controlButton} onPress={toggleVideo}>
+                    <Icon name={isVideoOn ? "video" : "video-slash"} size={30} color="white" />
+                    <Text style={styles.controlText}>{isVideoOn ? "Video Off" : "Video On"}</Text>
+                </TouchableOpacity>
+            </View>
         </View>
     );
 };
+
+const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#000',
     },
-    streamsContainer: {
-        flexGrow: 1,
+    remoteVideo: {
+        flex: 1,
+    },
+    remoteVideoPlaceholder: {
+        flex: 1,
         justifyContent: 'center',
-        padding: 10,
-    },
-    streamWrapper: {
-        marginBottom: 20,
-        borderWidth: 2,
-        borderColor: '#555',
-        borderRadius: 5,
-        overflow: 'hidden',
-    },
-    stream: {
-        width: '100%',
-        height: 200,
+        alignItems: 'center',
         backgroundColor: '#222',
     },
-    streamLabel: {
-        position: 'absolute',
-        bottom: 5,
-        left: 5,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        color: 'white',
-        padding: 3,
-        borderRadius: 3,
-    },
-    instructions: {
-        padding: 15,
-        backgroundColor: 'rgba(255,255,255,0.1)',
-        borderRadius: 5,
+    placeholderText: {
+        color: '#fff',
         marginTop: 20,
+        fontSize: 18,
     },
-    instructionTitle: {
-        color: 'white',
-        fontWeight: 'bold',
-        marginBottom: 10,
+    localVideo: {
+        position: 'absolute',
+        width: 100,
+        height: 150,
+        bottom: 150,
+        right: 20,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#fff',
     },
-    instructionText: {
-        color: 'white',
-        marginBottom: 5,
+    statusBar: {
+        position: 'absolute',
+        top: 40,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+    },
+    statusText: {
+        color: '#fff',
+        fontSize: 18,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        padding: 10,
+        borderRadius: 5,
+    },
+    durationText: {
+        color: '#fff',
+        fontSize: 16,
+        marginTop: 5,
+    },
+    controls: {
+        position: 'absolute',
+        bottom: 40,
+        left: 0,
+        right: 0,
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+    },
+    controlButton: {
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        padding: 15,
+        borderRadius: 50,
+        width: 80,
+    },
+    controlText: {
+        color: '#fff',
+        marginTop: 5,
+        fontSize: 12,
     },
 });
 
