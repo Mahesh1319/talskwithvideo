@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Dimensions,
-  Platform,
-  StatusBar
+import {
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    Dimensions,
+    Platform,
+    StatusBar,
+    Alert
 } from 'react-native';
 import { RTCView } from 'react-native-webrtc';
-import { firestore, auth } from '../services/firebase';
+import { firestore } from '../services/firebase';
 import WebRTCService from '../services/WebRTCService';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -28,7 +29,6 @@ const CallScreen = ({ route, navigation }) => {
     const unsubscribeRef = useRef(null);
     const intervalRef = useRef(null);
 
-    // Format time for display
     const formatTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
@@ -36,7 +36,6 @@ const CallScreen = ({ route, navigation }) => {
     };
 
     useEffect(() => {
-        // Start call timer
         intervalRef.current = setInterval(() => {
             setCallDuration(prev => prev + 1);
         }, 1000);
@@ -48,64 +47,282 @@ const CallScreen = ({ route, navigation }) => {
         };
     }, []);
 
+    // useEffect(() => {
+    //     const initializeCall = async () => {
+    //         try {
+    //             const stream = await WebRTCService.initialize(callId, isFrontCamera);
+    //             setLocalStream(stream);
+
+    //             // Listen for remote stream changes
+    //             WebRTCService.onRemoteStream((stream) => {
+    //                 if (stream) {
+    //                     setRemoteStream(stream);
+    //                 }
+    //             });
+
+    //             const callDoc = firestore().collection('calls').doc(callId);
+
+    //             unsubscribeRef.current = callDoc.onSnapshot(async (doc) => {
+    //                 const data = doc.data();
+    //                 if (!data) return;
+
+    //                 if (data.status === 'connected') {
+    //                     setCallStatus('Connected');
+    //                 }
+
+    //                 if (data.offer && !isCaller && !WebRTCService.getRemoteStream()) {
+    //                     try {
+    //                         // Only process offer if we don't have a remote stream yet
+    //                         await WebRTCService.setRemoteDescription(data.offer);
+    //                         const answer = await WebRTCService.createAnswer();
+    //                         await callDoc.update({
+    //                             answer: JSON.stringify(answer),
+    //                             status: 'connected',
+    //                             updatedAt: firestore.FieldValue.serverTimestamp(),
+    //                         });
+    //                         setCallStatus('Connected');
+    //                     } catch (error) {
+    //                         console.error('Error handling offer:', error);
+    //                     }
+    //                 }
+
+    //                 if (data.answer && isCaller && !WebRTCService.getRemoteStream()) {
+    //                     try {
+    //                         // Only process answer if we don't have a remote stream yet
+    //                         await WebRTCService.setRemoteDescription(data.answer);
+    //                         setCallStatus('Connected');
+    //                     } catch (error) {
+    //                         console.error('Error handling answer:', error);
+    //                     }
+    //                 }
+
+    //                 if (data.iceCandidates) {
+    //                     for (const candidate of data.iceCandidates) {
+    //                         try {
+    //                             await WebRTCService.addICECandidate(candidate);
+    //                         } catch (error) {
+    //                             console.error('Error adding ICE candidate:', error);
+    //                         }
+    //                     }
+    //                 }
+    //             });
+
+    //             if (isCaller) {
+    //                 try {
+    //                     const offer = await WebRTCService.createOffer();
+    //                     await callDoc.update({
+    //                         offer: JSON.stringify(offer),
+    //                         status: 'waiting',
+    //                         updatedAt: firestore.FieldValue.serverTimestamp(),
+    //                     });
+    //                 } catch (error) {
+    //                     console.error('Error creating offer:', error);
+    //                 }
+    //             }
+    //         } catch (error) {
+    //             console.error('Call initialization error:', error);
+    //             Alert.alert('Error', 'Failed to initialize call');
+    //             navigation.goBack();
+    //         }
+    //     };
+
+    //     initializeCall();
+
+    //     return () => {
+    //         unsubscribeRef.current && unsubscribeRef.current();
+    //         WebRTCService.cleanup();
+    //     };
+    // }, [callId, isCaller]);
+
+
+    // useEffect(() => {
+    //     const initializeCall = async () => {
+    //         try {
+    //             const stream = await WebRTCService.initialize(callId, isFrontCamera);
+    //             setLocalStream(stream);
+
+    //             // Improved remote stream handling
+    //             const remoteStreamListener = WebRTCService.onRemoteStream((stream) => {
+    //                 if (stream && stream.getVideoTracks().length > 0) {
+    //                     console.log('Received remote stream with video track');
+    //                     setRemoteStream(stream);
+    //                 } else {
+    //                     console.log('Remote stream has no video tracks');
+    //                 }
+    //             });
+
+    //             const callDoc = firestore().collection('calls').doc(callId);
+
+    //             unsubscribeRef.current = callDoc.onSnapshot(async (doc) => {
+    //                 const data = doc.data();
+    //                 if (!data) return;
+
+    //                 if (data.status === 'connected') {
+    //                     setCallStatus('Connected');
+    //                 }
+
+    //                 // Handle offer/answer only if we don't have a remote stream yet
+    //                 if (!remoteStream) {
+    //                     if (data.offer && !isCaller) {
+    //                         try {
+    //                             await WebRTCService.setRemoteDescription(data.offer);
+    //                             const answer = await WebRTCService.createAnswer();
+    //                             await callDoc.update({
+    //                                 answer: JSON.stringify(answer),
+    //                                 status: 'connected',
+    //                                 updatedAt: firestore.FieldValue.serverTimestamp(),
+    //                             });
+    //                             setCallStatus('Connected');
+    //                         } catch (error) {
+    //                             console.error('Error handling offer:', error);
+    //                         }
+    //                     }
+
+    //                     if (data.answer && isCaller) {
+    //                         try {
+    //                             await WebRTCService.setRemoteDescription(data.answer);
+    //                             setCallStatus('Connected');
+    //                         } catch (error) {
+    //                             console.error('Error handling answer:', error);
+    //                         }
+    //                     }
+    //                 }
+
+    //                 // Handle ICE candidates
+    //                 if (data.iceCandidates) {
+    //                     for (const candidate of data.iceCandidates) {
+    //                         try {
+    //                             await WebRTCService.addICECandidate(candidate);
+    //                         } catch (error) {
+    //                             console.error('Error adding ICE candidate:', error);
+    //                         }
+    //                     }
+    //                 }
+    //             });
+
+    //             if (isCaller) {
+    //                 try {
+    //                     const offer = await WebRTCService.createOffer();
+    //                     await callDoc.update({
+    //                         offer: JSON.stringify(offer),
+    //                         status: 'waiting',
+    //                         updatedAt: firestore.FieldValue.serverTimestamp(),
+    //                     });
+    //                 } catch (error) {
+    //                     console.error('Error creating offer:', error);
+    //                 }
+    //             }
+
+    //             return () => {
+    //                 remoteStreamListener(); // Clean up the listener
+    //             };
+    //         } catch (error) {
+    //             console.error('Call initialization error:', error);
+    //             Alert.alert('Error', 'Failed to initialize call');
+    //             navigation.goBack();
+    //         }
+    //     };
+
+    //     initializeCall();
+
+    //     return () => {
+    //         unsubscribeRef.current && unsubscribeRef.current();
+    //         WebRTCService.cleanup();
+    //     };
+    // }, [callId, isCaller]);
+
+
     useEffect(() => {
-        const initializeCall = async () => {
-            try {
-                const stream = await WebRTCService.initialize(callId, isFrontCamera);
-                setLocalStream(stream);
+    const initializeCall = async () => {
+        try {
+            const stream = await WebRTCService.initialize(callId, isFrontCamera);
+            setLocalStream(stream);
 
-                const callDoc = firestore().collection('calls').doc(callId);
+            // Listen for remote stream
+            const unsubscribeRemoteStream = WebRTCService.onRemoteStream((stream) => {
+                if (stream && stream.getVideoTracks().length > 0) {
+                    setRemoteStream(stream);
+                }
+            });
 
-                unsubscribeRef.current = callDoc.onSnapshot(async (doc) => {
-                    const data = doc.data();
+            const callDoc = firestore().collection('calls').doc(callId);
 
-                    if (!data) return;
+            unsubscribeRef.current = callDoc.onSnapshot(async (doc) => {
+                const data = doc.data();
+                if (!data) return;
 
-                    // Update call status when connected
-                    if (data.status === 'connected') {
-                        setCallStatus('Connected');
-                    }
+                // Update call status
+                if (data.status === 'connected') {
+                    setCallStatus('Connected');
+                }
 
-                    if (data.offer && !isCaller) {
+                // Handle offer if we're the callee
+                if (data.offer && !isCaller) {
+                    try {
                         await WebRTCService.setRemoteDescription(data.offer);
-                        const answer = await WebRTCService.createAnswer(data.offer);
-                        setCallStatus('Connected');
+                        const answer = await WebRTCService.createAnswer();
+                        await callDoc.update({
+                            answer: JSON.stringify(answer),
+                            status: 'connected',
+                            updatedAt: firestore.FieldValue.serverTimestamp(),
+                        });
+                    } catch (error) {
+                        console.error('Error handling offer:', error);
                     }
+                }
 
-                    if (data.answer && isCaller) {
+                // Handle answer if we're the caller
+                if (data.answer && isCaller) {
+                    try {
                         await WebRTCService.setRemoteDescription(data.answer);
-                        setCallStatus('Connected');
+                    } catch (error) {
+                        console.error('Error handling answer:', error);
                     }
+                }
 
-                    if (data.iceCandidates) {
-                        for (const candidate of data.iceCandidates) {
+                // Handle ICE candidates
+                if (data.iceCandidates) {
+                    for (const candidate of data.iceCandidates) {
+                        try {
                             await WebRTCService.addICECandidate(candidate);
+                        } catch (error) {
+                            console.error('Error adding ICE candidate:', error);
                         }
                     }
-
-                    const remote = WebRTCService.getRemoteStream();
-                    if (remote) {
-                        setRemoteStream(remote);
-                    }
-                });
-
-                if (isCaller) {
-                    await WebRTCService.createOffer();
                 }
-            } catch (error) {
-                console.error('Call initialization error:', error);
-                Alert.alert('Error', 'Failed to initialize call');
-                navigation.goBack();
+            });
+
+            // Create offer if we're the caller
+            if (isCaller) {
+                try {
+                    const offer = await WebRTCService.createOffer();
+                    await callDoc.update({
+                        offer: JSON.stringify(offer),
+                        status: 'waiting',
+                        updatedAt: firestore.FieldValue.serverTimestamp(),
+                    });
+                } catch (error) {
+                    console.error('Error creating offer:', error);
+                }
             }
-        };
 
-        initializeCall();
+            return () => {
+                unsubscribeRemoteStream();
+            };
+        } catch (error) {
+            console.error('Call initialization error:', error);
+            Alert.alert('Error', 'Failed to initialize call');
+            navigation.goBack();
+        }
+    };
 
-        return () => {
-            unsubscribeRef.current && unsubscribeRef.current();
-            WebRTCService.cleanup();
-        };
-    }, [callId, isCaller]);
+    initializeCall();
+
+    return () => {
+        unsubscribeRef.current && unsubscribeRef.current();
+        WebRTCService.cleanup();
+    };
+}, [callId, isCaller]);
 
     useEffect(() => {
         const unsubscribe = firestore()
@@ -113,7 +330,6 @@ const CallScreen = ({ route, navigation }) => {
             .doc(callId)
             .onSnapshot((snapshot) => {
                 const data = snapshot.data();
-
                 if (data?.status === 'ended' || data?.status === 'rejected') {
                     WebRTCService.cleanup();
                     navigation.goBack();
@@ -169,7 +385,6 @@ const CallScreen = ({ route, navigation }) => {
 
     return (
         <View style={styles.container}>
-            {/* Remote Video Stream */}
             {remoteStream ? (
                 <RTCView
                     streamURL={remoteStream.toURL()}
@@ -186,7 +401,6 @@ const CallScreen = ({ route, navigation }) => {
                 </View>
             )}
 
-            {/* Local Video Stream */}
             {localStream && isVideoOn && (
                 <RTCView
                     streamURL={localStream.toURL()}
@@ -196,7 +410,6 @@ const CallScreen = ({ route, navigation }) => {
                 />
             )}
 
-            {/* Status Bar */}
             <View style={styles.statusBar}>
                 <Text style={styles.statusText}>{callStatus}</Text>
                 {callStatus === 'Connected' && (
@@ -204,63 +417,57 @@ const CallScreen = ({ route, navigation }) => {
                 )}
             </View>
 
-            {/* Caller Info */}
             <View style={styles.callerInfo}>
                 <Text style={styles.callerText}>
                     {isCaller ? calleeEmail : callerEmail}
                 </Text>
             </View>
 
-            {/* Controls */}
             <View style={styles.controls}>
-                {/* Camera Toggle */}
-                <TouchableOpacity 
-                    style={styles.controlButton} 
+                <TouchableOpacity
+                    style={styles.controlButton}
                     onPress={toggleCamera}
                 >
-                    <Ionicons 
-                        name="camera-reverse" 
-                        size={30} 
-                        color="white" 
+                    <Ionicons
+                        name="camera-reverse"
+                        size={30}
+                        color="white"
                     />
                     <Text style={styles.controlText}>Flip</Text>
                 </TouchableOpacity>
 
-                {/* Mute Toggle */}
-                <TouchableOpacity 
-                    style={styles.controlButton} 
+                <TouchableOpacity
+                    style={styles.controlButton}
                     onPress={toggleMute}
                 >
-                    <Ionicons 
-                        name={isMuted ? "mic-off" : "mic"} 
-                        size={30} 
-                        color="white" 
+                    <Ionicons
+                        name={isMuted ? "mic-off" : "mic"}
+                        size={30}
+                        color="white"
                     />
                     <Text style={styles.controlText}>{isMuted ? "Unmute" : "Mute"}</Text>
                 </TouchableOpacity>
 
-                {/* Video Toggle */}
-                <TouchableOpacity 
-                    style={styles.controlButton} 
+                <TouchableOpacity
+                    style={styles.controlButton}
                     onPress={toggleVideo}
                 >
-                    <Ionicons 
-                        name={isVideoOn ? "videocam" : "videocam-off"} 
-                        size={30} 
-                        color="white" 
+                    <Ionicons
+                        name={isVideoOn ? "videocam" : "videocam-off"}
+                        size={30}
+                        color="white"
                     />
                     <Text style={styles.controlText}>{isVideoOn ? "Video Off" : "Video On"}</Text>
                 </TouchableOpacity>
 
-                {/* End Call Button */}
-                <TouchableOpacity 
-                    style={[styles.controlButton, styles.endCallButton]} 
+                <TouchableOpacity
+                    style={[styles.controlButton, styles.endCallButton]}
                     onPress={endCall}
                 >
-                    <Ionicons 
-                        name="call" 
-                        size={30} 
-                        color="white" 
+                    <Ionicons
+                        name="call"
+                        size={30}
+                        color="white"
                     />
                     <Text style={styles.controlText}>End</Text>
                 </TouchableOpacity>

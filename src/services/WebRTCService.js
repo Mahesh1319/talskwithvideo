@@ -11,18 +11,20 @@ const iceServers = [
     // Add your TURN servers here if needed
 ];
 
-class WebRTCService {
-    constructor() {
+class WebRTCService { constructor() {
         this.pc = null;
         this.localStream = null;
         this.remoteStream = null;
         this.currentCallId = null;
         this.remoteStreamListeners = [];
+        this.pendingIceCandidates = [];
+        this.isSettingRemoteDescription = false;
     }
 
     initialize = async (callId, isFrontCamera = true) => {
         try {
             this.currentCallId = callId;
+            this.pendingIceCandidates = [];
             
             // Create new peer connection
             this.pc = new RTCPeerConnection({ iceServers });
@@ -57,25 +59,21 @@ class WebRTCService {
                 }
             };
 
-            // Track handler - this is crucial for remote video
+            // Track handler
             this.pc.ontrack = (event) => {
                 console.log('Received remote track:', event.track.kind);
                 if (event.streams && event.streams.length > 0) {
+                    // Use the stream directly (don't create new MediaStream)
                     this.remoteStream = event.streams[0];
                     this._notifyRemoteStreamListeners();
                 }
             };
 
-            // Connection state handler
+            // Connection state handlers
             this.pc.onconnectionstatechange = () => {
                 console.log('Connection state:', this.pc.connectionState);
-                if (this.pc.connectionState === 'disconnected' || 
-                    this.pc.connectionState === 'failed') {
-                    this.cleanup();
-                }
             };
 
-            // ICE connection state handler
             this.pc.oniceconnectionstatechange = () => {
                 console.log('ICE connection state:', this.pc.iceConnectionState);
             };
@@ -95,16 +93,6 @@ class WebRTCService {
                 offerToReceiveVideo: true
             });
             await this.pc.setLocalDescription(offer);
-            
-            await firestore()
-                .collection('calls')
-                .doc(this.currentCallId)
-                .update({
-                    offer: JSON.stringify(offer),
-                    status: 'waiting',
-                    updatedAt: firestore.FieldValue.serverTimestamp(),
-                });
-            
             return offer;
         } catch (error) {
             console.error('Error creating offer:', error);
@@ -112,26 +100,27 @@ class WebRTCService {
         }
     };
 
-    createAnswer = async (offer) => {
+    createAnswer = async () => {
         try {
-            const parsedOffer = JSON.parse(offer);
-            await this.pc.setRemoteDescription(new RTCSessionDescription(parsedOffer));
-            
+            // Wait until we're in the correct state
+            if (this.pc.signalingState !== 'have-remote-offer') {
+                await new Promise(resolve => {
+                    const checkState = () => {
+                        if (this.pc.signalingState === 'have-remote-offer') {
+                            resolve();
+                        } else {
+                            setTimeout(checkState, 100);
+                        }
+                    };
+                    checkState();
+                });
+            }
+
             const answer = await this.pc.createAnswer({
                 offerToReceiveAudio: true,
                 offerToReceiveVideo: true
             });
             await this.pc.setLocalDescription(answer);
-            
-            await firestore()
-                .collection('calls')
-                .doc(this.currentCallId)
-                .update({
-                    answer: JSON.stringify(answer),
-                    status: 'connected',
-                    updatedAt: firestore.FieldValue.serverTimestamp(),
-                });
-            
             return answer;
         } catch (error) {
             console.error('Error creating answer:', error);
@@ -140,18 +129,40 @@ class WebRTCService {
     };
 
     setRemoteDescription = async (desc) => {
+        if (this.isSettingRemoteDescription) return;
+        
+        this.isSettingRemoteDescription = true;
         try {
             const parsedDesc = JSON.parse(desc);
+            
+            // Skip if we already have this description
+            if (this.pc.remoteDescription && 
+                this.pc.remoteDescription.type === parsedDesc.type) {
+                return;
+            }
+
             await this.pc.setRemoteDescription(new RTCSessionDescription(parsedDesc));
+            
+            // Process any pending ICE candidates
+            this._processPendingIceCandidates();
         } catch (error) {
             console.error('Error setting remote description:', error);
             throw error;
+        } finally {
+            this.isSettingRemoteDescription = false;
         }
     };
 
     addICECandidate = async (candidate) => {
         try {
             const iceCandidate = new RTCIceCandidate(JSON.parse(candidate));
+            
+            // If we don't have remote description yet, queue the candidate
+            if (!this.pc.remoteDescription) {
+                this.pendingIceCandidates.push(iceCandidate);
+                return;
+            }
+            
             await this.pc.addIceCandidate(iceCandidate);
         } catch (error) {
             console.error('Error adding ICE candidate:', error);
@@ -159,16 +170,24 @@ class WebRTCService {
         }
     };
 
+    _processPendingIceCandidates = async () => {
+        while (this.pendingIceCandidates.length > 0) {
+            const candidate = this.pendingIceCandidates.shift();
+            try {
+                await this.pc.addIceCandidate(candidate);
+            } catch (error) {
+                console.error('Error processing pending ICE candidate:', error);
+            }
+        }
+    };
+
     switchCamera = async (isFront) => {
         try {
             if (!this.localStream) return;
-            
+
             const videoTrack = this.localStream.getVideoTracks()[0];
             if (!videoTrack) return;
-            
-            // Stop the current track
-            videoTrack.stop();
-            
+
             // Get new media with the opposite facing mode
             const newStream = await mediaDevices.getUserMedia({
                 audio: false, // We don't need audio here
@@ -179,18 +198,34 @@ class WebRTCService {
                     frameRate: 30
                 }
             });
-            
-            // Replace the video track
+
+            // Get the new video track
             const newVideoTrack = newStream.getVideoTracks()[0];
-            const sender = this.pc.getSenders().find(s => s.track.kind === 'video');
-            await sender.replaceTrack(newVideoTrack);
-            
-            // Update local stream
-            this.localStream.removeTrack(videoTrack);
-            this.localStream.addTrack(newVideoTrack);
-            
-            // Stop the unused tracks from the new stream
-            newStream.getTracks().forEach(track => track.stop());
+
+            // Find the sender that's currently sending our video track
+            const sender = this.pc.getSenders().find(s => s.track && s.track.kind === 'video');
+
+            if (sender) {
+                // Replace the track with the new one
+                await sender.replaceTrack(newVideoTrack);
+
+                // Stop the old track
+                videoTrack.stop();
+
+                // Update local stream with new track
+                this.localStream.removeTrack(videoTrack);
+                this.localStream.addTrack(newVideoTrack);
+
+                // Stop the unused tracks from the new stream
+                newStream.getTracks().forEach(track => {
+                    if (track !== newVideoTrack) track.stop();
+                });
+            } else {
+                console.warn('No video sender found');
+                newStream.getTracks().forEach(track => track.stop());
+            }
+
+            return true;
         } catch (error) {
             console.error('Error switching camera:', error);
             throw error;
@@ -202,6 +237,9 @@ class WebRTCService {
         if (this.remoteStream) {
             callback(this.remoteStream);
         }
+        return () => {
+            this.remoteStreamListeners = this.remoteStreamListeners.filter(cb => cb !== callback);
+        };
     };
 
     _notifyRemoteStreamListeners = () => {
