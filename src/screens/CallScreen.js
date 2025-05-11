@@ -1,77 +1,103 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity, Dimensions,Button } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, Dimensions, Button } from 'react-native';
 import { RTCView } from 'react-native-webrtc';
 import { firestore, auth } from '../services/firebase';
 import WebRTCService from '../services/WebRTCService';
 import Icon from 'react-native-vector-icons/FontAwesome';
 
 const CallScreen = ({ route, navigation }) => {
-  const { callId, isCaller } = route.params;
-  const [localStream, setLocalStream] = useState(null);
-  const [remoteStream, setRemoteStream] = useState(null);
-  const unsubscribeRef = useRef(null);
+    const { callId, isCaller } = route.params;
+    const [localStream, setLocalStream] = useState(null);
+    const [remoteStream, setRemoteStream] = useState(null);
+    const unsubscribeRef = useRef(null);
 
-  useEffect(() => {
-    (async () => {
-      const stream = await WebRTCService.initialize(callId);
-      setLocalStream(stream);
+    useEffect(() => {
+        (async () => {
+            const stream = await WebRTCService.initialize(callId);
+            setLocalStream(stream);
 
-      const callDoc = firestore().collection('calls').doc(callId);
+            const callDoc = firestore().collection('calls').doc(callId);
 
-      unsubscribeRef.current = callDoc.onSnapshot(async (doc) => {
-        const data = doc.data();
+            unsubscribeRef.current = callDoc.onSnapshot(async (doc) => {
+                const data = doc.data();
 
-        if (!data) return;
+                if (!data) return;
 
-        if (data.offer && !isCaller) {
-          await WebRTCService.setRemoteDescription(data.offer);
-          await WebRTCService.createAnswer(data.offer);
-        }
+                if (data.offer && !isCaller) {
+                    await WebRTCService.setRemoteDescription(data.offer);
+                    await WebRTCService.createAnswer(data.offer);
+                }
 
-        if (data.answer && isCaller) {
-          await WebRTCService.setRemoteDescription(data.answer);
-        }
+                if (data.answer && isCaller) {
+                    await WebRTCService.setRemoteDescription(data.answer);
+                }
 
-        if (data.iceCandidates) {
-          for (const candidate of data.iceCandidates) {
-            await WebRTCService.addICECandidate(candidate);
-          }
-        }
+                if (data.iceCandidates) {
+                    for (const candidate of data.iceCandidates) {
+                        await WebRTCService.addICECandidate(candidate);
+                    }
+                }
 
-        const remote = WebRTCService.getRemoteStream();
-        if (remote) {
-          setRemoteStream(remote);
-        }
-      });
+                const remote = WebRTCService.getRemoteStream();
+                if (remote) {
+                    setRemoteStream(remote);
+                }
+            });
 
-      if (isCaller) {
-        await WebRTCService.createOffer();
-      }
-    })();
+            if (isCaller) {
+                await WebRTCService.createOffer();
+            }
+        })();
 
-    return () => {
-      unsubscribeRef.current && unsubscribeRef.current();
-      WebRTCService.cleanup();
+        return () => {
+            unsubscribeRef.current && unsubscribeRef.current();
+            WebRTCService.cleanup();
+        };
+    }, []);
+
+    useEffect(() => {
+        const unsubscribe = firestore()
+            .collection('calls')
+            .doc(callId)
+            .onSnapshot((snapshot) => {
+                const data = snapshot.data();
+
+                if (data?.status === 'ended') {
+                    WebRTCService.cleanup();
+                    navigation.goBack(); // Or show a modal or toast if needed
+                }
+            });
+
+        return () => unsubscribe();
+    }, [callId]);
+
+    const endCall = async () => {
+        await firestore().collection('calls').doc(callId).update({
+            status: 'ended',
+        });
+        WebRTCService.cleanup();
+        navigation.goBack();
     };
-  }, []);
 
-  return (
-    <View style={{ flex: 1 }}>
-      {localStream && (
-        <RTCView
-          streamURL={localStream.toURL()}
-          style={{ flex: 1, backgroundColor: 'black' }}
-        />
-      )}
-      {remoteStream && (
-        <RTCView
-          streamURL={remoteStream.toURL()}
-          style={{ flex: 1, backgroundColor: 'gray' }}
-        />
-      )}
-      <Button title="End Call" onPress={() => navigation.goBack()} />
-    </View>
-  );
+
+
+    return (
+        <View style={{ flex: 1 }}>
+            {localStream && (
+                <RTCView
+                    streamURL={localStream.toURL()}
+                    style={{ flex: 1, backgroundColor: 'black' }}
+                />
+            )}
+            {remoteStream && (
+                <RTCView
+                    streamURL={remoteStream.toURL()}
+                    style={{ flex: 1, backgroundColor: 'gray' }}
+                />
+            )}
+            <Button title="End Call" onPress={() => endCall()} />
+        </View>
+    );
 };
 
 export default CallScreen;
