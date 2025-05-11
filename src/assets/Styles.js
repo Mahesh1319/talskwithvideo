@@ -3,7 +3,7 @@ import Colours from "./Colours";
 
 
 const Styles = StyleSheet.create({
-   container: {
+    container: {
         flex: 1,
         justifyContent: 'center',
         padding: 20,
@@ -16,7 +16,7 @@ const Styles = StyleSheet.create({
         textAlign: 'center',
         color: Colours.dark,
     },
-      title: {
+    title: {
         fontSize: 26,
         fontWeight: 'semibold',
         marginBottom: 20,
@@ -36,13 +36,13 @@ const Styles = StyleSheet.create({
     },
     icon: {
         marginRight: 10,
-        color:Colours.primary
+        color: Colours.primary
     },
     input: {
         flex: 1,
         height: 50,
         color: '#333',
-        fontSize:16,
+        fontSize: 16,
     },
     buttonContainer: {
         backgroundColor: Colours.primary,
@@ -50,7 +50,7 @@ const Styles = StyleSheet.create({
         borderRadius: 5,
         alignItems: 'center',
         marginTop: 10,
-        borderRadius:10
+        borderRadius: 10
     },
     buttonText: {
         color: 'white',
@@ -101,7 +101,7 @@ const Styles = StyleSheet.create({
         flexDirection: 'row',
         marginLeft: 5,
         alignItems: 'center',
-        alignSelf:"center"
+        alignSelf: "center"
     },
     smallButton: {
         backgroundColor: Colours.primary,
@@ -172,7 +172,7 @@ const Styles = StyleSheet.create({
         marginTop: 10,
         color: '#555',
     },
-       modalOverlay: {
+    modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.6)',
         justifyContent: 'center',
@@ -207,35 +207,42 @@ const Styles = StyleSheet.create({
     callButtonContainer: {
         flexDirection: 'row',
         gap: '40%',
-        position:'absolute',
+        position: 'absolute',
         //justifyContent:'space-between',
-        bottom:20
+        bottom: 20
     },
     acceptButton: {
         backgroundColor: 'green',
         paddingVertical: 10,
         paddingHorizontal: 20,
-         borderRadius: 45,
-        height:90,
-        width:90,
-        alignItems:'center',
-        justifyContent:'center'
+        borderRadius: 45,
+        height: 90,
+        width: 90,
+        alignItems: 'center',
+        justifyContent: 'center'
     },
     rejectButton: {
         backgroundColor: 'red',
         paddingVertical: 10,
         paddingHorizontal: 20,
         borderRadius: 45,
-        height:90,
-        width:90,
-        alignItems:'center',
-        justifyContent:'center'
+        height: 90,
+        width: 90,
+        alignItems: 'center',
+        justifyContent: 'center'
     },
     buttonText: {
-        color: 'white',
+        color: Colours.white,
         fontSize: 16,
         fontWeight: 'bold',
     },
+    smallText: {
+        color: Colours.white,
+        fontSize: 10,
+        fontWeight: 'bold',
+        //paddingHorizontal: 5,
+        bottom:-6
+    }
 
 
 })

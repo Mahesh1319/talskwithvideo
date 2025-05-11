@@ -260,9 +260,16 @@ const HomeScreen = ({ navigation }) => {
     };
 
     const copyCallId = () => {
-        if (!callId.trim()) return;
-        Clipboard.setString(callId);
-        Alert.alert('Copied!', 'Call ID copied to clipboard');
+        //if (!callId.trim()) return;
+        Clipboard.setString(auth().currentUser?.uid);
+         Snackbar.show({
+                text: 'Call ID copied to clipboard',
+                duration: Snackbar.LENGTH_SHORT,
+                backgroundColor: Colours.snackBar,
+                textColor: Colours.white,
+                marginBottom: 10
+            });
+        // Alert.alert('Copied!', 'Call ID copied to clipboard');
     };
 
     const pasteCallId = async () => {
@@ -371,9 +378,11 @@ const HomeScreen = ({ navigation }) => {
                 <View style={Styles.callIdButtons}>
                     <TouchableOpacity style={Styles.smallButton} onPress={copyCallId}>
                         <Icon name="copy" size={16} color={Colours.white} />
+                        <Text style={Styles.smallText}>Copy</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={Styles.smallButton} onPress={pasteCallId}>
                         <Icon name="paste" size={16} color={Colours.white} />
+                        <Text  style={Styles.smallText}>paste</Text>
                     </TouchableOpacity>
                 </View>
                 <TouchableOpacity
