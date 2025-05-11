@@ -17,7 +17,7 @@ const App = () => {
       await auth().signInAnonymously(); // Or your auth method
       console.log("User authenticated:", auth().currentUser?.uid);
     } catch (err) {
-      console.error("Auth failed:", err);
+      console.log("signInAnonymously restricted in fire base--->:", err);
     }
   };
   checkAuth();

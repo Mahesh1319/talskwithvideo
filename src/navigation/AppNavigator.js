@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import AuthScreen from '../screens/AuthScreen';
 import HomeScreen from '../screens/HomeScreen';
 import CallScreen from '../screens/CallScreen';
+import Colours from '../assets/Colours';
 
 const Stack = createNativeStackNavigator();
 
@@ -27,7 +28,9 @@ const AppNavigator = () => {
               component={HomeScreen}
               options={{ 
                 title: 'Video Call App',
-                headerBackVisible: false
+                headerBackVisible: false,
+                headerTitleAlign: 'center',
+                headerTitleStyle: { color: Colours.primary, fontSize: 20, fontWeight: 'bold' }
               }}
             />
             <Stack.Screen

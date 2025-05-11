@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator, Alert, Clipboard } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator, Alert, Clipboard, Modal, Image } from 'react-native';
 import { auth, firestore } from '../services/firebase';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import Snackbar from 'react-native-snackbar';
+import Styles from '../assets/Styles';
+import Colours from '../assets/Colours';
 
 const HomeScreen = ({ navigation }) => {
     const [users, setUsers] = useState([]);
@@ -10,6 +14,10 @@ const HomeScreen = ({ navigation }) => {
     const [error, setError] = useState(null);
     const [clipboardContent, setClipboardContent] = useState('');
     const callIdInputRef = useRef(null);
+    const [incomingCallVisible, setIncomingCallVisible] = useState(false);
+    const [incomingCallData, setIncomingCallData] = useState(null);
+    const [incomingCallId, setIncomingCallId] = useState(null);
+
 
     useEffect(() => {
         const fetchUsers = async () => {
@@ -96,24 +104,45 @@ const HomeScreen = ({ navigation }) => {
         return () => unsubscribe();
     }, []);
 
+    // const showIncomingCallAlert = (callId, callData) => {
+    //     Alert.alert(
+    //         'Incoming Video Call',
+    //         `Call from ${callData.callerEmail || 'Unknown caller'}`,
+    //         [
+    //             {
+    //                 text: 'Reject',
+    //                 onPress: () => rejectCall(callId),
+    //                 style: 'destructive'
+    //             },
+    //             {
+    //                 text: 'Accept',
+    //                 onPress: () => acceptCall(callId, callData)
+    //             }
+    //         ],
+    //         { cancelable: false }
+    //     );
+    // };
+
     const showIncomingCallAlert = (callId, callData) => {
-        Alert.alert(
-            'Incoming Video Call',
-            `Call from ${callData.callerEmail || 'Unknown caller'}`,
-            [
-                {
-                    text: 'Reject',
-                    onPress: () => rejectCall(callId),
-                    style: 'destructive'
-                },
-                {
-                    text: 'Accept',
-                    onPress: () => acceptCall(callId, callData)
-                }
-            ],
-            { cancelable: false }
-        );
+        setIncomingCallId(callId);
+        setIncomingCallData(callData);
+        setIncomingCallVisible(true);
     };
+
+    const handleAccept = () => {
+        if (incomingCallId && incomingCallData) {
+            acceptCall(incomingCallId, incomingCallData);
+        }
+        setIncomingCallVisible(false);
+    };
+
+    const handleReject = () => {
+        if (incomingCallId) {
+            rejectCall(incomingCallId);
+        }
+        setIncomingCallVisible(false);
+    };
+
 
     const rejectCall = async (callId) => {
         try {
@@ -124,7 +153,14 @@ const HomeScreen = ({ navigation }) => {
                     status: 'rejected',
                     updatedAt: firestore.FieldValue.serverTimestamp()
                 });
-            Alert.alert('Call rejected');
+            //Alert.alert('Call rejected');
+                Snackbar.show({
+                text: 'Call Rejected',
+                duration: Snackbar.LENGTH_SHORT,
+                backgroundColor: Colours.snackBar,
+                textColor: Colours.white,
+                marginBottom: 10
+            });
         } catch (err) {
             console.error('Error rejecting call:', err);
             Alert.alert('Error', 'Failed to reject call');
@@ -189,7 +225,14 @@ const HomeScreen = ({ navigation }) => {
 
     const joinCall = async () => {
         if (!callId.trim()) {
-            Alert.alert('Error', 'Please enter a call ID');
+            //Alert.alert('Error', 'Please enter a call ID');
+            Snackbar.show({
+                text: 'Please enter a call ID',
+                duration: Snackbar.LENGTH_SHORT,
+                backgroundColor: Colours.snackBar,
+                textColor: Colours.white,
+                marginBottom: 10
+            });
             return;
         }
 
@@ -245,7 +288,7 @@ const HomeScreen = ({ navigation }) => {
     const handleSignOut = async () => {
         try {
             await auth().signOut();
-            navigation.navigate('Auth');
+            //navigation.navigate('Auth');
         } catch (err) {
             console.error("Sign out error:", err);
             setError(err.message);
@@ -254,207 +297,128 @@ const HomeScreen = ({ navigation }) => {
 
     if (loading) {
         return (
-            <View style={[styles.container, styles.center]}>
+            <View style={[Styles.container, Styles.center]}>
                 <ActivityIndicator size="large" color="#4285f4" />
-                <Text style={styles.loadingText}>Loading users...</Text>
+                <Text style={Styles.loadingText}>Loading users...</Text>
             </View>
         );
     }
 
     if (error) {
         return (
-            <View style={[styles.container, styles.center]}>
-                <Text style={styles.errorText}>{error}</Text>
+            <View style={[Styles.container, Styles.center]}>
+                <Text style={Styles.errorText}>{error}</Text>
                 <TouchableOpacity
-                    style={styles.retryButton}
+                    style={Styles.retryButton}
                     onPress={handleRetry}
                 >
-                    <Text style={styles.buttonText}>Retry</Text>
+                    <Text style={Styles.buttonText}>Retry</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[styles.retryButton, { backgroundColor: '#db4437', marginTop: 10 }]}
+                    style={[Styles.retryButton, { backgroundColor: '#db4437', marginTop: 10 }]}
                     onPress={handleSignOut}
                 >
-                    <Text style={styles.buttonText}>Logout</Text>
+                    <Text style={Styles.buttonText}>Logout</Text>
                 </TouchableOpacity>
             </View>
         );
     }
 
-    return (
-        <View style={styles.container}>
-            <Text style={styles.title}>Welcome, {auth().currentUser?.email}</Text>
+    const renderIncomingCall = () => (
 
-            <View style={styles.callContainer}>
+        <Modal
+            visible={incomingCallVisible}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setIncomingCallVisible(false)}
+        >
+            <View style={Styles.modalOverlay}>
+                <View style={Styles.modalContainer}>
+                    <Ionicons name="person-circle" size={150} color={Colours.primary} />
+                    <Text style={Styles.callerHeading}>
+                        Incoming Call from
+                    </Text>
+                    <Text style={Styles.callerText}>
+                        {incomingCallData?.callerEmail || 'Unknown'}
+                    </Text>
+                    <View style={Styles.callButtonContainer}>
+                        <TouchableOpacity style={Styles.rejectButton} onPress={handleReject}>
+                            <Text style={Styles.buttonText}>Reject</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={Styles.acceptButton} onPress={handleAccept}>
+                            <Text style={Styles.buttonText}>Attend</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </Modal>
+    )
+
+
+    return (
+        <View style={Styles.container}>
+            <Text style={Styles.title}>Welcome, {auth().currentUser?.email}</Text>
+
+            <View style={Styles.callContainer}>
                 <TextInput
                     ref={callIdInputRef}
-                    style={styles.input}
+                    style={[Styles.inputContainer, { flex: 1, height: 50, alignSelf: 'center' }]}
                     placeholder="Enter Call ID"
                     value={callId}
                     onChangeText={setCallId}
                     placeholderTextColor="#999"
                 />
-                <View style={styles.callIdButtons}>
-                    <TouchableOpacity style={styles.smallButton} onPress={copyCallId}>
-                        <Icon name="copy" size={16} color="white" />
+                <View style={Styles.callIdButtons}>
+                    <TouchableOpacity style={Styles.smallButton} onPress={copyCallId}>
+                        <Icon name="copy" size={16} color={Colours.white} />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.smallButton} onPress={pasteCallId}>
-                        <Icon name="paste" size={16} color="white" />
+                    <TouchableOpacity style={Styles.smallButton} onPress={pasteCallId}>
+                        <Icon name="paste" size={16} color={Colours.white} />
                     </TouchableOpacity>
                 </View>
                 <TouchableOpacity
-                    style={styles.joinButton}
+                    style={Styles.joinButton}
                     onPress={joinCall}
                     disabled={loading}
                 >
-                    <Text style={styles.buttonText}>Join Call</Text>
+                    <Text style={Styles.buttonText}>Join Call</Text>
                 </TouchableOpacity>
             </View>
 
-            <Text style={styles.subtitle}>Available Users</Text>
+            <Text style={Styles.subtitle}>Available Users</Text>
 
             {users.length === 0 ? (
-                <Text style={styles.noUsersText}>No other users available</Text>
+                <Text style={Styles.noUsersText}>No other users available</Text>
             ) : (
                 <FlatList
                     data={users}
                     keyExtractor={(item) => item.id}
                     renderItem={({ item }) => (
                         <TouchableOpacity
-                            style={styles.userItem}
+                            style={Styles.userItem}
                             onPress={() => startCall(item.uid, item.email)}
                             disabled={loading}
                         >
-                            <Icon name="user" size={20} color="#4285f4" style={styles.userIcon} />
-                            <Text style={styles.userText}>{item.email}</Text>
-                            <Icon name="video-camera" size={20} color="#4285f4" style={styles.callIcon} />
+                            <Icon name="user" size={20} color={Colours.primary} style={Styles.userIcon} />
+                            <Text style={Styles.userText}>{item.email}</Text>
+                            <Icon name="video-camera" size={20} color={Colours.primary} style={Styles.callIcon} />
                         </TouchableOpacity>
                     )}
                 />
             )}
 
             <TouchableOpacity
-                style={styles.logoutButton}
+                style={Styles.logoutButton}
                 onPress={handleSignOut}
                 disabled={loading}
             >
-                <Text style={styles.buttonText}>Logout</Text>
+                <Text style={Styles.buttonText}>Logout</Text>
             </TouchableOpacity>
+            {renderIncomingCall()}
         </View>
     );
 };
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        padding: 20,
-        backgroundColor: '#f5f5f5',
-    },
-    center: {
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    title: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginBottom: 20,
-        color: '#333',
-    },
-    subtitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        marginTop: 20,
-        marginBottom: 10,
-        color: '#555',
-    },
-    callContainer: {
-        flexDirection: 'row',
-        marginBottom: 20,
-        alignItems: 'center',
-    },
-    input: {
-        flex: 1,
-        height: 50,
-        backgroundColor: '#fff',
-        paddingHorizontal: 15,
-        borderRadius: 5,
-        borderWidth: 1,
-        borderColor: '#ddd',
-        color: '#333',
-    },
-    callIdButtons: {
-        flexDirection: 'row',
-        marginLeft: 5,
-    },
-    smallButton: {
-        backgroundColor: '#4285f4',
-        padding: 10,
-        borderRadius: 5,
-        marginHorizontal: 2,
-    },
-    joinButton: {
-        backgroundColor: '#4285f4',
-        paddingHorizontal: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderRadius: 5,
-        marginLeft: 10,
-        height: 50,
-    },
-    userItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 15,
-        backgroundColor: '#fff',
-        borderRadius: 5,
-        marginBottom: 10,
-        elevation: 2,
-    },
-    userIcon: {
-        marginRight: 10,
-    },
-    userText: {
-        flex: 1,
-        fontSize: 16,
-        color: '#333',
-    },
-    callIcon: {
-        marginLeft: 10,
-    },
-    buttonText: {
-        color: 'white',
-        fontWeight: 'bold',
-    },
-    logoutButton: {
-        backgroundColor: '#db4437',
-        padding: 15,
-        borderRadius: 5,
-        alignItems: 'center',
-        marginTop: 20,
-    },
-    errorText: {
-        color: 'red',
-        marginBottom: 20,
-        textAlign: 'center',
-        fontSize: 16,
-    },
-    noUsersText: {
-        textAlign: 'center',
-        marginTop: 20,
-        color: '#666',
-        fontSize: 16,
-    },
-    retryButton: {
-        backgroundColor: '#4285f4',
-        padding: 15,
-        borderRadius: 5,
-        width: 150,
-        alignItems: 'center',
-    },
-    loadingText: {
-        marginTop: 10,
-        color: '#555',
-    },
-});
+
 
 export default HomeScreen;

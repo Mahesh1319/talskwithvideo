@@ -2,10 +2,15 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { auth, firestore } from '../services/firebase';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import Styles from '../assets/Styles';
+import Colours from '../assets/Colours';
+import Snackbar from 'react-native-snackbar';
 
 const AuthScreen = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [secureTextEntry, setSecureTextEntry] = useState(true);
     const [isLogin, setIsLogin] = useState(true);
     const [error, setError] = useState('');
 
@@ -78,57 +83,123 @@ const AuthScreen = () => {
     };
 
     const handleAuth = async () => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+        if (email.trim() === '') {
+            Snackbar.show({
+                text: 'Please enter E-mail',
+                duration: Snackbar.LENGTH_SHORT,
+                backgroundColor: Colours.snackBar,
+                textColor: Colours.white,
+                marginBottom: 10
+            });
+            return;
+        }
+
+        if (!emailRegex.test(email)) {
+            Snackbar.show({
+                text: 'Please enter a valid E-mail',
+                duration: Snackbar.LENGTH_SHORT,
+                backgroundColor: Colours.snackBar,
+                textColor: Colours.white,
+                marginBottom: 10
+            });
+            return;
+        }
+
+        if (password.trim() === '') {
+            Snackbar.show({
+                text: 'Please enter your password',
+                duration: Snackbar.LENGTH_SHORT,
+                backgroundColor: Colours.snackBar,
+                textColor: Colours.white,
+                marginBottom: 10
+            });
+            return;
+        }
+
+        if (password.length < 6) {
+            Snackbar.show({
+                text: 'Password must be at least 6 characters',
+                duration: Snackbar.LENGTH_SHORT,
+                backgroundColor: Colours.snackBar,
+                textColor: Colours.white,
+                marginBottom: 10
+            });
+            return;
+        }
+
         try {
             let userCredential;
             if (isLogin) {
                 userCredential = await auth().signInWithEmailAndPassword(email, password);
             } else {
                 userCredential = await auth().createUserWithEmailAndPassword(email, password);
-                // Only create document for new users
                 await createUserDocument(userCredential.user);
             }
             console.log("Auth successful:", userCredential.user.uid);
         } catch (err) {
-            console.error("Auth error:", err);
-            setError(err.message);
+            Snackbar.show({
+                text: 'Please check your E-mail or password',
+                duration: Snackbar.LENGTH_SHORT,
+                backgroundColor: Colours.snackBar,
+                textColor: Colours.white,
+                marginBottom: 10
+            });
         }
     };
 
+
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>{isLogin ? 'Login' : 'Sign Up'}</Text>
+        <View style={Styles.container}>
+            <Text style={Styles.header}>{isLogin ? 'Welcone back' : 'Welcome'}</Text>
+            <Text style={Styles.title}>{isLogin ? 'Login here' : 'Sign Up here'}</Text>
 
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? <Text style={Styles.error}>{error}</Text> : null}
+            <View style={{ height: 10 }} />
 
-            <View style={styles.inputContainer}>
-                <Icon name="envelope" size={20} color="#777" style={styles.icon} />
+            <View style={[Styles.inputContainer, { marginBottom: 15, }]}>
+                <Icon name="envelope" size={20} color="#777" style={Styles.icon} />
                 <TextInput
-                    style={styles.input}
-                    placeholder="Email"
+                    style={Styles.input}
+                    placeholder="Enter your E-mail"
                     value={email}
                     onChangeText={setEmail}
                     autoCapitalize="none"
                     keyboardType="email-address"
+                    cursorColor={Colours.primary}
+                    placeholderTextColor={Colours.placeHolderText}
                 />
             </View>
 
-            <View style={styles.inputContainer}>
-                <Icon name="lock" size={20} color="#777" style={styles.icon} />
+            <View style={[Styles.inputContainer, { marginBottom: 15, }]}>
+                <Icon name="lock" size={20} color="#777" style={Styles.icon} />
                 <TextInput
-                    style={styles.input}
-                    placeholder="Password"
+                    style={Styles.input}
+                    placeholder="Enter your password"
                     value={password}
                     onChangeText={setPassword}
-                    secureTextEntry
+                    secureTextEntry={secureTextEntry}
+                    placeholderTextColor={Colours.placeHolderText}
+                    cursorColor={Colours.primary}
                 />
+                <TouchableOpacity onPress={() => setSecureTextEntry(!secureTextEntry)}>
+                    {
+                        secureTextEntry ? (
+                            <Ionicons name="eye-off" size={20} color="#777" style={Styles.icon} />
+                        ) : (
+                            <Ionicons name="eye" size={20} color="#777" style={Styles.icon} />
+                        )
+                    }
+                </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.button} onPress={handleAuth}>
-                <Text style={styles.buttonText}>{isLogin ? 'Login' : 'Sign Up'}</Text>
+            <TouchableOpacity style={Styles.buttonContainer} onPress={handleAuth}>
+                <Text style={Styles.buttonText}>{isLogin ? 'Login' : 'Sign Up'}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
-                <Text style={styles.switchText}>
+                <Text style={Styles.switchText}>
                     {isLogin ? 'Need an account? Sign Up' : 'Have an account? Login'}
                 </Text>
             </TouchableOpacity>
@@ -136,59 +207,5 @@ const AuthScreen = () => {
     );
 };
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: 'center',
-        padding: 20,
-        backgroundColor: '#f5f5f5',
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        marginBottom: 20,
-        textAlign: 'center',
-        color: '#333',
-    },
-    inputContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 15,
-        backgroundColor: '#fff',
-        borderRadius: 5,
-        paddingHorizontal: 10,
-        elevation: 2,
-    },
-    icon: {
-        marginRight: 10,
-    },
-    input: {
-        flex: 1,
-        height: 50,
-        color: '#333',
-    },
-    button: {
-        backgroundColor: '#4285f4',
-        padding: 15,
-        borderRadius: 5,
-        alignItems: 'center',
-        marginTop: 10,
-    },
-    buttonText: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 16,
-    },
-    switchText: {
-        marginTop: 20,
-        textAlign: 'center',
-        color: '#4285f4',
-    },
-    error: {
-        color: 'red',
-        textAlign: 'center',
-        marginBottom: 10,
-    },
-});
 
 export default AuthScreen;
