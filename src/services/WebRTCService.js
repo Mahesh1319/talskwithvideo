@@ -8,6 +8,8 @@ import { firestore } from './firebase';
 
 const iceServers = [
     { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
     // Add TURN servers here if needed
 ];
 
@@ -26,10 +28,15 @@ class WebRTCService {
         try {
             this.currentCallId = callId;
             
-            // Get user media
+            // Get user media with proper constraints
             this.localStream = await mediaDevices.getUserMedia({
                 audio: true,
-                video: { facingMode: 'user' }
+                video: {
+                    facingMode: 'user',
+                    width: { min: 640, ideal: 1280 },
+                    height: { min: 480, ideal: 720 },
+                    frameRate: { min: 15, ideal: 30 }
+                }
             });
     
             // Create peer connection
@@ -51,12 +58,26 @@ class WebRTCService {
                 }
             };
     
-            // Remote stream handler
+            // Track event handler for remote streams
             this.pc.ontrack = (event) => {
-                if (event.streams && event.streams[0]) {
+                console.log('Received track event:', event);
+                if (event.streams && event.streams.length > 0) {
                     this.remoteStream = event.streams[0];
-                    console.log('Remote stream received');
+                    this._notifyRemoteStreamListeners();
                 }
+            };
+    
+            // Connection state handlers for debugging
+            this.pc.onconnectionstatechange = () => {
+                console.log('Connection state changed:', this.pc.connectionState);
+            };
+    
+            this.pc.oniceconnectionstatechange = () => {
+                console.log('ICE connection state changed:', this.pc.iceConnectionState);
+            };
+    
+            this.pc.onsignalingstatechange = () => {
+                console.log('Signaling state changed:', this.pc.signalingState);
             };
     
             return this.localStream;
@@ -73,6 +94,7 @@ class WebRTCService {
                 offerToReceiveVideo: true
             });
             await this.pc.setLocalDescription(offer);
+            console.log('Created offer:', offer);
             return offer;
         } catch (error) {
             console.error('Error creating offer:', error);
@@ -82,70 +104,13 @@ class WebRTCService {
 
     createAnswer = async () => {
         try {
-            // Check if we have a valid remote offer
-            if (!this.pc.remoteDescription || this.pc.remoteDescription.type !== 'offer') {
-                throw new Error('No valid remote offer to answer');
-            }
-
-            // If we're already in the correct state, proceed immediately
-            if (this.pc.signalingState === 'have-remote-offer') {
-                const answer = await this.pc.createAnswer({
-                    offerToReceiveAudio: true,
-                    offerToReceiveVideo: true
-                });
-                await this.pc.setLocalDescription(answer);
-                return answer;
-            }
-
-            // Otherwise, wait for the state to transition
-            return new Promise((resolve, reject) => {
-                if (!this.pc) {
-                    reject(new Error('PeerConnection is null'));
-                    return;
-                }
-
-                const timeout = setTimeout(() => {
-                    cleanup();
-                    reject(new Error(`Timeout waiting for correct state. Current: ${this.pc?.signalingState}`));
-                }, 10000);
-
-                const stateChangeHandler = async () => {
-                    if (!this.pc) {
-                        cleanup();
-                        reject(new Error('PeerConnection is null'));
-                        return;
-                    }
-
-                    console.log('Signaling state changed to:', this.pc.signalingState);
-                    if (this.pc.signalingState === 'have-remote-offer') {
-                        try {
-                            const answer = await this.pc.createAnswer({
-                                offerToReceiveAudio: true,
-                                offerToReceiveVideo: true
-                            });
-                            await this.pc.setLocalDescription(answer);
-                            cleanup();
-                            resolve(answer);
-                        } catch (err) {
-                            cleanup();
-                            reject(err);
-                        }
-                    } else if (this.pc.signalingState === 'closed') {
-                        cleanup();
-                        reject(new Error('Connection closed before answer could be created'));
-                    }
-                };
-
-                const cleanup = () => {
-                    clearTimeout(timeout);
-                    if (this.pc) {
-                        this.pc.onsignalingstatechange = null;
-                    }
-                };
-
-                // Set the handler
-                this.pc.onsignalingstatechange = stateChangeHandler;
+            const answer = await this.pc.createAnswer({
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
             });
+            await this.pc.setLocalDescription(answer);
+            console.log('Created answer:', answer);
+            return answer;
         } catch (error) {
             console.error('Error creating answer:', error);
             throw error;
@@ -157,13 +122,15 @@ class WebRTCService {
         this.isSettingRemoteDescription = true;
 
         try {
-            const parsedDesc = JSON.parse(desc);
+            const parsedDesc = typeof desc === 'string' ? JSON.parse(desc) : desc;
             
             if (this.pc.remoteDescription && 
                 this.pc.remoteDescription.type === parsedDesc.type) {
+                console.log('Remote description already set with same type');
                 return;
             }
 
+            console.log('Setting remote description:', parsedDesc);
             await this.pc.setRemoteDescription(new RTCSessionDescription(parsedDesc));
             this._processPendingIceCandidates();
         } catch (error) {
@@ -176,21 +143,25 @@ class WebRTCService {
 
     addICECandidate = async (candidate) => {
         try {
-            const iceCandidate = new RTCIceCandidate(JSON.parse(candidate));
+            const iceCandidate = typeof candidate === 'string' ? JSON.parse(candidate) : candidate;
+            const rtcIceCandidate = new RTCIceCandidate(iceCandidate);
             
             if (!this.pc.remoteDescription) {
-                this.pendingIceCandidates.push(iceCandidate);
+                console.log('Remote description not set yet, queuing ICE candidate');
+                this.pendingIceCandidates.push(rtcIceCandidate);
                 return;
             }
             
-            await this.pc.addIceCandidate(iceCandidate);
+            console.log('Adding ICE candidate:', rtcIceCandidate);
+            await this.pc.addIceCandidate(rtcIceCandidate);
         } catch (error) {
-            console.error('Error adding ICE candidate:', error);
-            throw error;
+            console.log('Error adding ICE candidate:', error);
+            // Don't throw error for ICE candidates as they might be duplicates
         }
     };
 
     _processPendingIceCandidates = async () => {
+        console.log('Processing pending ICE candidates:', this.pendingIceCandidates.length);
         while (this.pendingIceCandidates.length > 0) {
             const candidate = this.pendingIceCandidates.shift();
             try {
@@ -212,9 +183,9 @@ class WebRTCService {
                 audio: false,
                 video: {
                     facingMode: isFront ? 'user' : 'environment',
-                    width: 640,
-                    height: 480,
-                    frameRate: 30
+                    width: { min: 640, ideal: 1280 },
+                    height: { min: 480, ideal: 720 },
+                    frameRate: { min: 15, ideal: 30 }
                 }
             });
 
@@ -222,6 +193,7 @@ class WebRTCService {
             const sender = this.pc.getSenders().find(s => s.track && s.track.kind === 'video');
 
             if (sender) {
+                console.log('Replacing video track');
                 await sender.replaceTrack(newVideoTrack);
                 videoTrack.stop();
                 this.localStream.removeTrack(videoTrack);
@@ -230,6 +202,7 @@ class WebRTCService {
                     if (track !== newVideoTrack) track.stop();
                 });
             } else {
+                console.error('No video sender found');
                 newStream.getTracks().forEach(track => track.stop());
                 throw new Error('No video sender found');
             }
@@ -250,13 +223,20 @@ class WebRTCService {
     };
 
     _notifyRemoteStreamListeners = () => {
+        console.log('Notifying remote stream listeners');
         this.remoteStreamListeners.forEach(callback => {
-            callback(this.remoteStream);
+            try {
+                callback(this.remoteStream);
+            } catch (error) {
+                console.error('Error in remote stream listener:', error);
+            }
         });
     };
 
     cleanup = () => {
         try {
+            console.log('Cleaning up WebRTC resources');
+            
             if (this.pc) {
                 this.pc.onicecandidate = null;
                 this.pc.ontrack = null;

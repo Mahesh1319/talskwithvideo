@@ -1,4 +1,3 @@
-//CallScreen.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
@@ -8,14 +7,14 @@ import {
     Dimensions,
     Platform,
     StatusBar,
-    Alert
+    Alert,
+    PermissionsAndroid
 } from 'react-native';
 import { RTCView } from 'react-native-webrtc';
 import { firestore } from '../services/firebase';
 import WebRTCService from '../services/WebRTCService';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import styles from '../assets/callerStyle';
 
 const { width, height } = Dimensions.get('window');
 
@@ -38,6 +37,31 @@ const CallScreen = ({ route, navigation }) => {
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     };
 
+    const requestPermissions = async () => {
+        if (Platform.OS === 'android') {
+            try {
+                const grants = await PermissionsAndroid.requestMultiple([
+                    PermissionsAndroid.PERMISSIONS.CAMERA,
+                    PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+                ]);
+
+                if (
+                    grants['android.permission.CAMERA'] !== PermissionsAndroid.RESULTS.GRANTED ||
+                    grants['android.permission.RECORD_AUDIO'] !== PermissionsAndroid.RESULTS.GRANTED
+                ) {
+                    Alert.alert('Permissions required', 'Camera and microphone permissions are needed to make calls');
+                    navigation.goBack();
+                    return false;
+                }
+                return true;
+            } catch (err) {
+                console.warn(err);
+                return false;
+            }
+        }
+        return true;
+    };
+
     useEffect(() => {
         intervalRef.current = setInterval(() => {
             setCallDuration(prev => prev + 1);
@@ -52,13 +76,20 @@ const CallScreen = ({ route, navigation }) => {
 
     useEffect(() => {
         const initializeCall = async () => {
+            const hasPermissions = await requestPermissions();
+            if (!hasPermissions) return;
+
             try {
-                const stream = await WebRTCService.initialize(callId, isFrontCamera);
+                const stream = await WebRTCService.initialize(callId, isCaller);
                 setLocalStream(stream);
 
                 remoteStreamListenerRef.current = WebRTCService.onRemoteStream((stream) => {
+                    console.log('Remote stream received in CallScreen');
                     if (stream && stream.getVideoTracks().length > 0) {
+                        console.log('Remote stream has video tracks');
                         setRemoteStream(stream);
+                    } else {
+                        console.log('Remote stream has no video tracks');
                     }
                 });
 
@@ -68,14 +99,24 @@ const CallScreen = ({ route, navigation }) => {
                     const data = doc.data();
                     if (!data) return;
 
+                    console.log('Call document updated:', data);
+
                     if (data.status === 'connected') {
                         setCallStatus('Connected');
                     }
 
+                    if (data.status === 'ended' || data.status === 'rejected') {
+                        WebRTCService.cleanup();
+                        navigation.goBack();
+                        return;
+                    }
+
                     if (data.offer && !isCaller) {
                         try {
+                            console.log('Received offer, setting remote description');
                             await WebRTCService.setRemoteDescription(data.offer);
                             const answer = await WebRTCService.createAnswer();
+                            console.log('Created answer, updating call document');
                             await callDoc.update({
                                 answer: JSON.stringify(answer),
                                 status: 'connected',
@@ -94,6 +135,7 @@ const CallScreen = ({ route, navigation }) => {
 
                     if (data.answer && isCaller) {
                         try {
+                            console.log('Received answer, setting remote description');
                             await WebRTCService.setRemoteDescription(data.answer);
                             setCallStatus('Connected');
                         } catch (error) {
@@ -102,6 +144,7 @@ const CallScreen = ({ route, navigation }) => {
                     }
 
                     if (data.iceCandidates) {
+                        console.log('Processing ICE candidates:', data.iceCandidates.length);
                         for (const candidate of data.iceCandidates) {
                             try {
                                 await WebRTCService.addICECandidate(candidate);
@@ -114,7 +157,9 @@ const CallScreen = ({ route, navigation }) => {
 
                 if (isCaller) {
                     try {
+                        console.log('Creating offer as caller');
                         const offer = await WebRTCService.createOffer();
+                        console.log('Offer created, updating call document');
                         await callDoc.update({
                             offer: JSON.stringify(offer),
                             status: 'waiting',
@@ -122,20 +167,21 @@ const CallScreen = ({ route, navigation }) => {
                         });
                     } catch (error) {
                         console.error('Error creating offer:', error);
+                        Alert.alert('Error', 'Failed to start call');
+                        navigation.goBack();
                     }
                 }
             } catch (error) {
                 console.error('Call initialization error:', error);
                 Alert.alert('Error', 'Failed to initialize call');
-                if (navigation.canGoBack()) {
-                    navigation.goBack();
-                }
+                navigation.goBack();
             }
         };
 
         initializeCall();
 
         return () => {
+            console.log('Cleaning up CallScreen');
             if (unsubscribeRef.current) {
                 unsubscribeRef.current();
             }
@@ -146,23 +192,6 @@ const CallScreen = ({ route, navigation }) => {
         };
     }, [callId, isCaller, navigation]);
 
-    useEffect(() => {
-        const unsubscribe = firestore()
-            .collection('calls')
-            .doc(callId)
-            .onSnapshot((snapshot) => {
-                const data = snapshot.data();
-                if (data?.status === 'ended' || data?.status === 'rejected') {
-                    WebRTCService.cleanup();
-                    if (navigation.canGoBack()) {
-                        navigation.goBack();
-                    }
-                }
-            });
-
-        return () => unsubscribe();
-    }, [callId, navigation]);
-
     const endCall = async () => {
         try {
             await firestore().collection('calls').doc(callId).update({
@@ -171,15 +200,11 @@ const CallScreen = ({ route, navigation }) => {
                 duration: callDuration
             });
             WebRTCService.cleanup();
-            if (navigation.canGoBack()) {
-                navigation.goBack();
-            }
+            navigation.goBack();
         } catch (error) {
             console.error('Error ending call:', error);
             WebRTCService.cleanup();
-            if (navigation.canGoBack()) {
-                navigation.goBack();
-            }
+            navigation.goBack();
         }
     };
 
@@ -190,6 +215,7 @@ const CallScreen = ({ route, navigation }) => {
             setIsFrontCamera(newCameraState);
         } catch (error) {
             console.error('Error switching camera:', error);
+            Alert.alert('Error', 'Failed to switch camera');
         }
     };
 
@@ -248,13 +274,13 @@ const CallScreen = ({ route, navigation }) => {
             <View style={styles.statusBar}>
                 <Text style={styles.statusText}>{callStatus}</Text>
                 {callStatus === 'Connected' && (
-                    <Text style={[styles.durationText]}>{formatTime(callDuration)}</Text>
+                    <Text style={styles.durationText}>{formatTime(callDuration)}</Text>
                 )}
             </View>
 
             {/* Caller Info */}
             <View style={styles.callerInfo}>
-                <Text style={[styles.callerText,{top:20}]}>
+                <Text style={styles.callerText}>
                     {isCaller ? calleeEmail : callerEmail}
                 </Text>
             </View>
@@ -313,6 +339,97 @@ const CallScreen = ({ route, navigation }) => {
     );
 };
 
-
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: 'black',
+    },
+    remoteVideo: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+    },
+    remoteVideoPlaceholder: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#222',
+    },
+    placeholderText: {
+        color: '#fff',
+        marginTop: 20,
+        fontSize: 18,
+    },
+    localVideo: {
+        position: 'absolute',
+        width: 100,
+        height: 150,
+        bottom: 150,
+        right: 20,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#fff',
+    },
+    statusBar: {
+        position: 'absolute',
+        top: Platform.OS === 'ios' ? 40 : StatusBar.currentHeight + 10,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+    },
+    statusText: {
+        color: '#fff',
+        fontSize: 18,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        padding: 10,
+        borderRadius: 5,
+    },
+    durationText: {
+        color: '#fff',
+        fontSize: 16,
+        marginTop: 5,
+    },
+    callerInfo: {
+        position: 'absolute',
+        top: Platform.OS === 'ios' ? 80 : StatusBar.currentHeight + 50,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+    },
+    callerText: {
+        color: '#fff',
+        fontSize: 16,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        padding: 10,
+        borderRadius: 5,
+    },
+    controls: {
+        position: 'absolute',
+        bottom: 40,
+        left: 0,
+        right: 0,
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        paddingHorizontal: 20,
+    },
+    controlButton: {
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        padding: 15,
+        borderRadius: 50,
+        width: 80,
+        height: 80,
+    },
+    endCallButton: {
+        backgroundColor: '#ff3b30',
+    },
+    controlText: {
+        color: '#fff',
+        marginTop: 5,
+        fontSize: 10,
+    },
+});
 
 export default CallScreen;
