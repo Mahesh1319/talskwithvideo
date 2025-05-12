@@ -124,7 +124,7 @@ const CallScreen = ({ route, navigation }) => {
                             });
                             setCallStatus('Connected');
                         } catch (error) {
-                            console.error('Error handling offer:', error);
+                            console.log('Error handling offer:', error);
                             await callDoc.update({
                                 status: 'failed',
                                 error: error.message,
