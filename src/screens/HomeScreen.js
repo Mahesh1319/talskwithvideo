@@ -419,7 +419,7 @@ const HomeScreen = ({ navigation }) => {
             <Text style={Styles.title}>Welcome, {auth().currentUser?.email}</Text>
 
             {/* My Call ID Section */}
-            <View style={[Styles.callContainer,{flexDirection:'column'}]}>
+            <View style={[Styles.callContainer, { flexDirection: 'column' }]}>
                 <Text style={Styles.sectionLabel}>Your Call ID:</Text>
                 <View style={Styles.inputRow}>
                     <TextInput
@@ -430,8 +430,8 @@ const HomeScreen = ({ navigation }) => {
                         placeholderTextColor="#999"
                         editable={false}
                     />
-                    <TouchableOpacity 
-                        style={Styles.copyButton} 
+                    <TouchableOpacity
+                        style={Styles.copyButton}
                         onPress={copyMyCallId}
                     >
                         <Icon name="copy" size={16} color={Colours.white} />
@@ -447,7 +447,7 @@ const HomeScreen = ({ navigation }) => {
             </View>
 
             {/* Join Call Section */}
-             <View style={[Styles.callContainer,{flexDirection:'column'}]}>
+            <View style={[Styles.callContainer, { flexDirection: 'column' }]}>
                 <Text style={Styles.sectionLabel}>Join a Call:</Text>
                 <View style={Styles.inputRow}>
                     <TextInput
@@ -458,8 +458,8 @@ const HomeScreen = ({ navigation }) => {
                         onChangeText={setCallId}
                         placeholderTextColor="#999"
                     />
-                    <TouchableOpacity 
-                        style={Styles.copyButton} 
+                    <TouchableOpacity
+                        style={Styles.copyButton}
                         onPress={pasteCallId}
                     >
                         <Icon name="paste" size={16} color={Colours.white} />
@@ -483,15 +483,19 @@ const HomeScreen = ({ navigation }) => {
                     data={users}
                     keyExtractor={(item) => item.id}
                     renderItem={({ item }) => (
-                        <TouchableOpacity
+                        <View
                             style={Styles.userItem}
-                            onPress={() => startCall(item.uid, item.email)}
-                            disabled={loading}
                         >
                             <Icon name="user" size={20} color={Colours.primary} style={Styles.userIcon} />
                             <Text style={Styles.userText}>{item.email}</Text>
-                            <Icon name="video-camera" size={20} color={Colours.primary} style={Styles.callIcon} />
-                        </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => startCall(item.uid, item.email)}
+                                disabled={loading}
+                            >
+                                <Icon name="video-camera" size={20} color={Colours.primary} style={Styles.callIcon} />
+                            </TouchableOpacity>
+
+                        </View>
                     )}
                 />
             )}
