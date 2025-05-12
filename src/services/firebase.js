@@ -2,13 +2,21 @@ import firebase from '@react-native-firebase/app';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 
+// const firebaseConfig = {
+//   apiKey: "AIzaSyA3B7Im2zNhjS73WZMXtX-UNuc-YH_zy6M",
+//   authDomain: "talkwithvideo-f2765.firebaseapp.com",
+//   projectId: "talkwithvideo-f2765",
+//   storageBucket: "talkwithvideo-f2765.firebasestorage.app",
+//   messagingSenderId: "346527519468",
+//   appId: "1:346527519468:android:81f6ec1ce9ba6422960bc9"
+// };
 const firebaseConfig = {
-  apiKey: "AIzaSyA3B7Im2zNhjS73WZMXtX-UNuc-YH_zy6M",
-  authDomain: "talkwithvideo-f2765.firebaseapp.com",
-  projectId: "talkwithvideo-f2765",
-  storageBucket: "talkwithvideo-f2765.firebasestorage.app",
-  messagingSenderId: "346527519468",
-  appId: "1:346527519468:android:81f6ec1ce9ba6422960bc9"
+  apiKey: "AIzaSyDjqHHPTCQni6imdfcPqNR-KUYpLzGJnCc",
+  authDomain: "talkwithcall-f2765.firebaseapp.com",
+  projectId: "talkwithcall",
+  storageBucket: "talkwithcall.firebasestorage.app",
+  messagingSenderId: "562926998383",
+  appId: "1:562926998383:android:45da1c456d1f6c3dad8e9a"
 };
 
 // if (!firebase.apps.length) {

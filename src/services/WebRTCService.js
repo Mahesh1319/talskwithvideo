@@ -8,10 +8,11 @@ import { firestore } from './firebase';
 
 const iceServers = [
     { urls: 'stun:stun.l.google.com:19302' },
-    // Add your TURN servers here if needed
+    // Add TURN servers here if needed
 ];
 
-class WebRTCService { constructor() {
+class WebRTCService {
+    constructor() {
         this.pc = null;
         this.localStream = null;
         this.remoteStream = null;
@@ -21,67 +22,46 @@ class WebRTCService { constructor() {
         this.isSettingRemoteDescription = false;
     }
 
-    initialize = async (callId, isFrontCamera = true) => {
+    initialize = async (callId, isCaller) => {
         try {
             this.currentCallId = callId;
-            this.pendingIceCandidates = [];
-            
-            // Create new peer connection
-            this.pc = new RTCPeerConnection({ iceServers });
             
             // Get user media
             this.localStream = await mediaDevices.getUserMedia({
                 audio: true,
-                video: {
-                    facingMode: isFrontCamera ? 'user' : 'environment',
-                    width: 640,
-                    height: 480,
-                    frameRate: 30,
-                },
+                video: { facingMode: 'user' }
             });
-
-            // Add tracks to peer connection
-            this.localStream.getTracks().forEach((track) => {
+    
+            // Create peer connection
+            this.pc = new RTCPeerConnection({ iceServers });
+    
+            // Add local stream tracks
+            this.localStream.getTracks().forEach(track => {
                 this.pc.addTrack(track, this.localStream);
             });
-
-            // ICE Candidate handler
+    
+            // ICE candidate handler
             this.pc.onicecandidate = (event) => {
                 if (event.candidate) {
-                    firestore()
-                        .collection('calls')
-                        .doc(callId)
-                        .update({
-                            iceCandidates: firestore.FieldValue.arrayUnion(
-                                JSON.stringify(event.candidate)
-                            ),
-                        });
+                    firestore().collection('calls').doc(callId).update({
+                        iceCandidates: firestore.FieldValue.arrayUnion(
+                            JSON.stringify(event.candidate)
+                        )
+                    });
                 }
             };
-
-            // Track handler
+    
+            // Remote stream handler
             this.pc.ontrack = (event) => {
-                console.log('Received remote track:', event.track.kind);
-                if (event.streams && event.streams.length > 0) {
-                    // Use the stream directly (don't create new MediaStream)
+                if (event.streams && event.streams[0]) {
                     this.remoteStream = event.streams[0];
-                    this._notifyRemoteStreamListeners();
+                    console.log('Remote stream received');
                 }
             };
-
-            // Connection state handlers
-            this.pc.onconnectionstatechange = () => {
-                console.log('Connection state:', this.pc.connectionState);
-            };
-
-            this.pc.oniceconnectionstatechange = () => {
-                console.log('ICE connection state:', this.pc.iceConnectionState);
-            };
-
+    
             return this.localStream;
         } catch (error) {
-            console.error('WebRTC initialization error:', error);
-            this.cleanup();
+            console.error('WebRTC init error:', error);
             throw error;
         }
     };
@@ -102,26 +82,70 @@ class WebRTCService { constructor() {
 
     createAnswer = async () => {
         try {
-            // Wait until we're in the correct state
-            if (this.pc.signalingState !== 'have-remote-offer') {
-                await new Promise(resolve => {
-                    const checkState = () => {
-                        if (this.pc.signalingState === 'have-remote-offer') {
-                            resolve();
-                        } else {
-                            setTimeout(checkState, 100);
-                        }
-                    };
-                    checkState();
-                });
+            // Check if we have a valid remote offer
+            if (!this.pc.remoteDescription || this.pc.remoteDescription.type !== 'offer') {
+                throw new Error('No valid remote offer to answer');
             }
 
-            const answer = await this.pc.createAnswer({
-                offerToReceiveAudio: true,
-                offerToReceiveVideo: true
+            // If we're already in the correct state, proceed immediately
+            if (this.pc.signalingState === 'have-remote-offer') {
+                const answer = await this.pc.createAnswer({
+                    offerToReceiveAudio: true,
+                    offerToReceiveVideo: true
+                });
+                await this.pc.setLocalDescription(answer);
+                return answer;
+            }
+
+            // Otherwise, wait for the state to transition
+            return new Promise((resolve, reject) => {
+                if (!this.pc) {
+                    reject(new Error('PeerConnection is null'));
+                    return;
+                }
+
+                const timeout = setTimeout(() => {
+                    cleanup();
+                    reject(new Error(`Timeout waiting for correct state. Current: ${this.pc?.signalingState}`));
+                }, 10000);
+
+                const stateChangeHandler = async () => {
+                    if (!this.pc) {
+                        cleanup();
+                        reject(new Error('PeerConnection is null'));
+                        return;
+                    }
+
+                    console.log('Signaling state changed to:', this.pc.signalingState);
+                    if (this.pc.signalingState === 'have-remote-offer') {
+                        try {
+                            const answer = await this.pc.createAnswer({
+                                offerToReceiveAudio: true,
+                                offerToReceiveVideo: true
+                            });
+                            await this.pc.setLocalDescription(answer);
+                            cleanup();
+                            resolve(answer);
+                        } catch (err) {
+                            cleanup();
+                            reject(err);
+                        }
+                    } else if (this.pc.signalingState === 'closed') {
+                        cleanup();
+                        reject(new Error('Connection closed before answer could be created'));
+                    }
+                };
+
+                const cleanup = () => {
+                    clearTimeout(timeout);
+                    if (this.pc) {
+                        this.pc.onsignalingstatechange = null;
+                    }
+                };
+
+                // Set the handler
+                this.pc.onsignalingstatechange = stateChangeHandler;
             });
-            await this.pc.setLocalDescription(answer);
-            return answer;
         } catch (error) {
             console.error('Error creating answer:', error);
             throw error;
@@ -130,20 +154,17 @@ class WebRTCService { constructor() {
 
     setRemoteDescription = async (desc) => {
         if (this.isSettingRemoteDescription) return;
-        
         this.isSettingRemoteDescription = true;
+
         try {
             const parsedDesc = JSON.parse(desc);
             
-            // Skip if we already have this description
             if (this.pc.remoteDescription && 
                 this.pc.remoteDescription.type === parsedDesc.type) {
                 return;
             }
 
             await this.pc.setRemoteDescription(new RTCSessionDescription(parsedDesc));
-            
-            // Process any pending ICE candidates
             this._processPendingIceCandidates();
         } catch (error) {
             console.error('Error setting remote description:', error);
@@ -157,7 +178,6 @@ class WebRTCService { constructor() {
         try {
             const iceCandidate = new RTCIceCandidate(JSON.parse(candidate));
             
-            // If we don't have remote description yet, queue the candidate
             if (!this.pc.remoteDescription) {
                 this.pendingIceCandidates.push(iceCandidate);
                 return;
@@ -188,9 +208,8 @@ class WebRTCService { constructor() {
             const videoTrack = this.localStream.getVideoTracks()[0];
             if (!videoTrack) return;
 
-            // Get new media with the opposite facing mode
             const newStream = await mediaDevices.getUserMedia({
-                audio: false, // We don't need audio here
+                audio: false,
                 video: {
                     facingMode: isFront ? 'user' : 'environment',
                     width: 640,
@@ -199,33 +218,21 @@ class WebRTCService { constructor() {
                 }
             });
 
-            // Get the new video track
             const newVideoTrack = newStream.getVideoTracks()[0];
-
-            // Find the sender that's currently sending our video track
             const sender = this.pc.getSenders().find(s => s.track && s.track.kind === 'video');
 
             if (sender) {
-                // Replace the track with the new one
                 await sender.replaceTrack(newVideoTrack);
-
-                // Stop the old track
                 videoTrack.stop();
-
-                // Update local stream with new track
                 this.localStream.removeTrack(videoTrack);
                 this.localStream.addTrack(newVideoTrack);
-
-                // Stop the unused tracks from the new stream
                 newStream.getTracks().forEach(track => {
                     if (track !== newVideoTrack) track.stop();
                 });
             } else {
-                console.warn('No video sender found');
                 newStream.getTracks().forEach(track => track.stop());
+                throw new Error('No video sender found');
             }
-
-            return true;
         } catch (error) {
             console.error('Error switching camera:', error);
             throw error;
@@ -255,18 +262,25 @@ class WebRTCService { constructor() {
                 this.pc.ontrack = null;
                 this.pc.onconnectionstatechange = null;
                 this.pc.oniceconnectionstatechange = null;
+                this.pc.onsignalingstatechange = null;
                 this.pc.close();
                 this.pc = null;
             }
 
             if (this.localStream) {
-                this.localStream.getTracks().forEach((track) => track.stop());
+                this.localStream.getTracks().forEach(track => track.stop());
                 this.localStream = null;
             }
 
-            this.remoteStream = null;
+            if (this.remoteStream) {
+                this.remoteStream.getTracks().forEach(track => track.stop());
+                this.remoteStream = null;
+            }
+
             this.remoteStreamListeners = [];
             this.currentCallId = null;
+            this.pendingIceCandidates = [];
+            this.isSettingRemoteDescription = false;
         } catch (error) {
             console.error('Error during cleanup:', error);
         }

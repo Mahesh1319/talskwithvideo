@@ -1,3 +1,5 @@
+//HomeScreen.js
+
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator, Alert, Clipboard, Modal, Image } from 'react-native';
 import { auth, firestore } from '../services/firebase';
@@ -20,86 +22,114 @@ const HomeScreen = ({ navigation }) => {
 
 
     useEffect(() => {
-        const fetchUsers = async () => {
-            try {
-                const currentUser = auth().currentUser;
-                if (!currentUser) {
-                    setError('Not authenticated. Please login again.');
-                    setLoading(false);
-                    return;
-                }
-
-                const unsubscribe = firestore()
-                    .collection('users')
-                    .where('uid', '!=', currentUser.uid)
-                    .onSnapshot(
-                        (querySnapshot) => {
-                            try {
-                                if (!querySnapshot) {
-                                    throw new Error('No snapshot returned');
-                                }
-
-                                const usersList = [];
-                                querySnapshot.forEach((doc) => {
-                                    if (doc.exists) {
-                                        usersList.push({
-                                            id: doc.id,
-                                            ...doc.data()
-                                        });
-                                    }
-                                });
-                                setUsers(usersList);
-                                setError(null);
-                            } catch (err) {
-                                console.error("Snapshot error:", err);
-                                setError(err.message);
-                            } finally {
-                                setLoading(false);
-                            }
-                        },
-                        (err) => {
-                            console.error("Firestore error:", err);
-                            setError(err.message);
-                            setLoading(false);
-                        }
-                    );
-
-                return () => unsubscribe();
-            } catch (err) {
-                console.error("Initialization error:", err);
-                setError(err.message);
-                setLoading(false);
-            }
-        };
-
         fetchUsers();
     }, []);
+
+    const fetchUsers = async () => {
+        try {
+            const currentUser = auth().currentUser;
+            if (!currentUser) {
+                setError('Not authenticated. Please login again.');
+                setLoading(false);
+                return;
+            }
+
+            const unsubscribe = firestore()
+                .collection('users')
+                .where('uid', '!=', currentUser.uid)
+                .onSnapshot(
+                    (querySnapshot) => {
+                        try {
+                            if (!querySnapshot) {
+                                throw new Error('No snapshot returned');
+                            }
+
+                            const usersList = [];
+                            querySnapshot.forEach((doc) => {
+                                if (doc.exists) {
+                                    usersList.push({
+                                        id: doc.id,
+                                        ...doc.data()
+                                    });
+                                }
+                            });
+                            setUsers(usersList);
+                            setError(null);
+                        } catch (err) {
+                            console.error("Snapshot error:", err);
+                            setError(err.message);
+                        } finally {
+                            setLoading(false);
+                        }
+                    },
+                    (err) => {
+                        console.error("Firestore error:", err);
+                        setError(err.message);
+                        setLoading(false);
+                    }
+                );
+
+            return () => unsubscribe();
+        } catch (err) {
+            console.error("Initialization error:", err);
+            setError(err.message);
+            setLoading(false);
+        }
+    };
+
+    // useEffect(() => {
+    //     const currentUser = auth().currentUser;
+    //     if (!currentUser) return;
+
+    //     // Listen for calls where current user is the callee
+    //     const unsubscribe = firestore()
+    //         .collection('calls')
+    //         .where('calleeId', '==', currentUser.uid)
+    //         .where('status', '==', 'calling')
+    //         .onSnapshot(
+    //             (snapshot) => {
+    //                 if (!snapshot) return;
+    //                 snapshot.docChanges().forEach((change) => {
+    //                     if (change.type === 'added') {
+    //                         const callData = change.doc.data();
+    //                         showIncomingCallAlert(change.doc.id, callData);
+    //                     }
+    //                 });
+    //             },
+    //             (error) => {
+    //                 console.error('Error listening for calls:', error);
+    //                 setError(error.message);
+    //             }
+    //         );
+
+
+    //     return () => unsubscribe();
+    // }, []);
 
     useEffect(() => {
         const currentUser = auth().currentUser;
         if (!currentUser) return;
 
-        // Listen for calls where current user is the callee
+        // Listen for incoming calls
         const unsubscribe = firestore()
             .collection('calls')
             .where('calleeId', '==', currentUser.uid)
             .where('status', '==', 'calling')
             .onSnapshot(
                 (snapshot) => {
-                    if (!snapshot) return;
-                    snapshot.docChanges().forEach((change) => {
+                    snapshot?.docChanges().forEach((change) => {
                         if (change.type === 'added') {
                             const callData = change.doc.data();
+                            console.log('Incoming call detected:', callData);
                             showIncomingCallAlert(change.doc.id, callData);
                         }
                     });
                 },
                 (error) => {
-                    console.error('Error listening for calls:', error);
-                    setError(error.message);
+                    console.error('Call listener error:', error);
+                    Alert.alert('Error', 'Failed to listen for calls');
                 }
             );
-
 
         return () => unsubscribe();
     }, []);
@@ -154,7 +184,7 @@ const HomeScreen = ({ navigation }) => {
                     updatedAt: firestore.FieldValue.serverTimestamp()
                 });
             //Alert.alert('Call rejected');
-                Snackbar.show({
+            Snackbar.show({
                 text: 'Call Rejected',
                 duration: Snackbar.LENGTH_SHORT,
                 backgroundColor: Colours.snackBar,
@@ -192,37 +222,116 @@ const HomeScreen = ({ navigation }) => {
         }
     };
 
+    // const startCall = async (calleeId, calleeEmail) => {
+    //     console.log('Start call called--->:', calleeId, calleeEmail);
+    //     try {
+    //         const callerId = auth().currentUser.uid;
+    //         const callerEmail = auth().currentUser.email;
+    //         const callDoc = firestore().collection('calls').doc();
+
+    //         await callDoc.set({
+    //             callerId,
+    //             callerEmail,
+    //             calleeId,
+    //             calleeEmail,
+    //             callId: callDoc.id,
+    //             status: 'calling',
+    //             participants: [callerId, calleeId],
+    //             iceCandidates: [],
+    //             createdAt: firestore.FieldValue.serverTimestamp()
+    //         });
+
+    //         navigation.navigate('Call', {
+    //             callId: callDoc.id,
+    //             callerId,
+    //             calleeId,
+    //             isCaller: true,
+    //             calleeEmail
+    //         });
+    //     } catch (err) {
+    //         console.error('Call failed:', err);
+    //         Alert.alert('Error', 'Failed to start call: ' + err.message);
+    //     }
+    // };
+
+
+    //     const startCall = async (calleeId, calleeEmail) => {
+    //     console.log('Start call called with:', { calleeId, calleeEmail });
+    //     try {
+    //         const caller = auth().currentUser;
+    //         if (!caller) {
+    //             throw new Error('User not authenticated');
+    //         }
+
+    //         const callDocRef = firestore().collection('calls').doc();
+    //         const callId = callDocRef.id;
+
+    //         const callData = {
+    //             callerId: caller.uid,
+    //             callerEmail: caller.email,
+    //             calleeId,
+    //             calleeEmail,
+    //             callId,
+    //             status: 'calling',
+    //             participants: [caller.uid, calleeId],
+    //             iceCandidates: [],
+    //             createdAt: firestore.FieldValue.serverTimestamp(),
+    //             updatedAt: firestore.FieldValue.serverTimestamp()
+    //         };
+
+    //         console.log('Creating call document:', callData);
+    //         await callDocRef.set(callData);
+
+    //         console.log('Navigating to CallScreen with:', {
+    //             callId,
+    //             isCaller: true,
+    //             callerEmail: caller.email,
+    //             calleeEmail
+    //         });
+
+    //         navigation.navigate('Call', {
+    //             callId,
+    //             isCaller: true,
+    //             callerEmail: caller.email,
+    //             calleeEmail
+    //         });
+
+    //     } catch (err) {
+    //         console.error('Call failed:', err);
+    //         Alert.alert('Error', 'Failed to start call: ' + err.message);
+    //     }
+    // };
+    // Start call function
     const startCall = async (calleeId, calleeEmail) => {
         try {
-            const callerId = auth().currentUser.uid;
-            const callerEmail = auth().currentUser.email;
-            const callDoc = firestore().collection('calls').doc();
+            const caller = auth().currentUser;
+            if (!caller) throw new Error("Not authenticated");
 
-            await callDoc.set({
-                callerId,
-                callerEmail,
+            const callDocRef = firestore().collection('calls').doc();
+            const callData = {
+                callerId: caller.uid,
+                callerEmail: caller.email,
                 calleeId,
                 calleeEmail,
-                callId: callDoc.id,
+                callId: callDocRef.id,
                 status: 'calling',
-                participants: [callerId, calleeId],
-                iceCandidates: [],
+                participants: [caller.uid, calleeId],
                 createdAt: firestore.FieldValue.serverTimestamp()
-            });
+            };
+
+            await callDocRef.set(callData);
 
             navigation.navigate('Call', {
-                callId: callDoc.id,
-                callerId,
-                calleeId,
+                callId: callDocRef.id,
                 isCaller: true,
+                callerEmail: caller.email,
                 calleeEmail
             });
         } catch (err) {
-            console.error('Call failed:', err);
-            Alert.alert('Error', 'Failed to start call: ' + err.message);
+            console.error("Call start error:", err);
+            Alert.alert('Error', 'Failed to start call');
         }
     };
-
     const joinCall = async () => {
         if (!callId.trim()) {
             //Alert.alert('Error', 'Please enter a call ID');
@@ -262,13 +371,13 @@ const HomeScreen = ({ navigation }) => {
     const copyCallId = () => {
         //if (!callId.trim()) return;
         Clipboard.setString(auth().currentUser?.uid);
-         Snackbar.show({
-                text: 'Call ID copied to clipboard',
-                duration: Snackbar.LENGTH_SHORT,
-                backgroundColor: Colours.snackBar,
-                textColor: Colours.white,
-                marginBottom: 10
-            });
+        Snackbar.show({
+            text: 'Call ID copied to clipboard',
+            duration: Snackbar.LENGTH_SHORT,
+            backgroundColor: Colours.snackBar,
+            textColor: Colours.white,
+            marginBottom: 10
+        });
         // Alert.alert('Copied!', 'Call ID copied to clipboard');
     };
 
@@ -289,7 +398,7 @@ const HomeScreen = ({ navigation }) => {
     const handleRetry = () => {
         setError(null);
         setLoading(true);
-        useEffect(() => fetchUsers(), []);
+        fetchUsers();
     };
 
     const handleSignOut = async () => {
@@ -382,7 +491,7 @@ const HomeScreen = ({ navigation }) => {
                     </TouchableOpacity>
                     <TouchableOpacity style={Styles.smallButton} onPress={pasteCallId}>
                         <Icon name="paste" size={16} color={Colours.white} />
-                        <Text  style={Styles.smallText}>paste</Text>
+                        <Text style={Styles.smallText}>paste</Text>
                     </TouchableOpacity>
                 </View>
                 <TouchableOpacity
@@ -401,7 +510,7 @@ const HomeScreen = ({ navigation }) => {
             ) : (
                 <FlatList
                     data={users}
-                    keyExtractor={(item) => item.id}
+                    keyExtractor={(item) => item.uid}
                     renderItem={({ item }) => (
                         <TouchableOpacity
                             style={Styles.userItem}
