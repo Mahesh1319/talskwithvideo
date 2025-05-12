@@ -255,7 +255,14 @@ const HomeScreen = ({ navigation }) => {
                 callerEmail: callData.callerEmail
             });
         } catch (err) {
-            Alert.alert('Error', err.message);
+            Snackbar.show({
+                text: err.message,
+                duration: Snackbar.LENGTH_SHORT,
+                backgroundColor: Colours.snackBar,
+                textColor: Colours.white,
+                marginBottom: 10
+            });
+            //Alert.alert('Error', err.message);
         }
     };
 
