@@ -10,6 +10,10 @@ import firestore from '@react-native-firebase/firestore';
 //   messagingSenderId: "346527519468",
 //   appId: "1:346527519468:android:81f6ec1ce9ba6422960bc9"
 // };
+
+//Here we need to do the configuration from our firebase
+//you can see the details in android/app/googl-services.json file
+
 const firebaseConfig = {
   apiKey: "AIzaSyDjqHHPTCQni6imdfcPqNR-KUYpLzGJnCc",
   authDomain: "talkwithcall-f2765.firebaseapp.com",

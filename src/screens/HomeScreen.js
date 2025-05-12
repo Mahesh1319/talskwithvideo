@@ -23,6 +23,8 @@ const HomeScreen = ({ navigation }) => {
         fetchUsers();
     }, []);
 
+
+    //function to fetch the registerd users
     const fetchUsers = async () => {
         try {
             const currentUser = auth().currentUser;
@@ -103,12 +105,15 @@ const HomeScreen = ({ navigation }) => {
         return () => unsubscribe();
     }, []);
 
+
+    //function to shwo the incoming call alert
     const showIncomingCallAlert = (callId, callData) => {
         setIncomingCallId(callId);
         setIncomingCallData(callData);
         setIncomingCallVisible(true);
     };
 
+    //to accept the call
     const handleAccept = () => {
         if (incomingCallId && incomingCallData) {
             acceptCall(incomingCallId, incomingCallData);
@@ -116,6 +121,7 @@ const HomeScreen = ({ navigation }) => {
         setIncomingCallVisible(false);
     };
 
+    //to declain the call
     const handleReject = () => {
         if (incomingCallId) {
             rejectCall(incomingCallId);
@@ -123,6 +129,7 @@ const HomeScreen = ({ navigation }) => {
         setIncomingCallVisible(false);
     };
 
+    //to reject the call function 
     const rejectCall = async (callId) => {
         try {
             await firestore()
@@ -145,6 +152,7 @@ const HomeScreen = ({ navigation }) => {
         }
     };
 
+    //to accept the call function
     const acceptCall = async (callId, callData) => {
         try {
             // Update call status
@@ -171,6 +179,7 @@ const HomeScreen = ({ navigation }) => {
         }
     };
 
+    //function to create a new call using id
     const initiateCall = async () => {
         if (!callId.trim()) {
             Snackbar.show({
@@ -192,19 +201,19 @@ const HomeScreen = ({ navigation }) => {
 
             if (callDoc.exists) {
                 const callData = callDoc.data();
-            
+
                 if (!callData) {
                     throw new Error('Call data is undefined');
                 }
-            
+
                 if (callData.status === 'ended') {
                     throw new Error('This call has already ended');
                 }
-            
+
                 if (callData.callerId === currentUser.uid) {
                     throw new Error('You cannot join your own call as a participant');
                 }
-            
+
                 navigation.navigate('Call', {
                     callId,
                     callerId: callData.callerId,
@@ -213,7 +222,7 @@ const HomeScreen = ({ navigation }) => {
                     callerEmail: callData.callerEmail,
                     calleeEmail: currentUser.email
                 });
-            }  else {
+            } else {
                 // Create new call
                 const callDocRef = firestore().collection('calls').doc(callId);
                 const callData = {
@@ -239,7 +248,7 @@ const HomeScreen = ({ navigation }) => {
         } catch (err) {
             console.log("Call initiation error:", err);
             Snackbar.show({
-                text: 'Call initiation error:'+err,
+                text: 'Call initiation error:' + err,
                 duration: Snackbar.LENGTH_SHORT,
                 backgroundColor: Colours.snackBar,
                 textColor: Colours.white,
@@ -248,10 +257,11 @@ const HomeScreen = ({ navigation }) => {
         }
     };
 
+    //to copy the user id
     const copyCallId = () => {
         const currentUserId = auth().currentUser?.uid;
         if (!currentUserId) return;
-        
+
         Clipboard.setString(currentUserId);
         Snackbar.show({
             text: 'Your ID copied to clipboard',
@@ -262,6 +272,7 @@ const HomeScreen = ({ navigation }) => {
         });
     };
 
+    //to paste the copied item
     const pasteCallId = async () => {
         try {
             const content = await Clipboard.getString();
@@ -276,12 +287,14 @@ const HomeScreen = ({ navigation }) => {
         }
     };
 
+    //retry to fetch the user if error occurs
     const handleRetry = () => {
         setError(null);
         setLoading(true);
         fetchUsers();
     };
 
+    //function call to logout
     const handleSignOut = async () => {
         try {
             await auth().signOut();
@@ -320,6 +333,7 @@ const HomeScreen = ({ navigation }) => {
         );
     }
 
+    //function to show the incoming call pop up
     const renderIncomingCall = () => (
         <Modal
             visible={incomingCallVisible}
@@ -349,6 +363,7 @@ const HomeScreen = ({ navigation }) => {
         </Modal>
     );
 
+    //UI rentering function
     return (
         <View style={Styles.container}>
             <Text style={Styles.title}>Welcome, {auth().currentUser?.email}</Text>

@@ -37,6 +37,8 @@ const CallScreen = ({ route, navigation }) => {
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     };
 
+
+    //Persmision for accesing camera and mic
     const requestPermissions = async () => {
         if (Platform.OS === 'android') {
             try {
@@ -62,6 +64,7 @@ const CallScreen = ({ route, navigation }) => {
         return true;
     };
 
+    //To set the call duration
     useEffect(() => {
         intervalRef.current = setInterval(() => {
             setCallDuration(prev => prev + 1);
@@ -74,6 +77,8 @@ const CallScreen = ({ route, navigation }) => {
         };
     }, []);
 
+
+    //To initialize the call
     useEffect(() => {
         const initializeCall = async () => {
             const hasPermissions = await requestPermissions();
@@ -192,6 +197,8 @@ const CallScreen = ({ route, navigation }) => {
         };
     }, [callId, isCaller, navigation]);
 
+
+    //Function to end the call
     const endCall = async () => {
         try {
             await firestore().collection('calls').doc(callId).update({
@@ -208,6 +215,8 @@ const CallScreen = ({ route, navigation }) => {
         }
     };
 
+
+    //function to Switch the camera
     const toggleCamera = async () => {
         try {
             const newCameraState = !isFrontCamera;
@@ -219,6 +228,8 @@ const CallScreen = ({ route, navigation }) => {
         }
     };
 
+
+    //function to mute the call
     const toggleMute = () => {
         if (localStream) {
             const audioTracks = localStream.getAudioTracks();
@@ -229,6 +240,7 @@ const CallScreen = ({ route, navigation }) => {
         }
     };
 
+    //function to pause the camera
     const toggleVideo = () => {
         if (localStream) {
             const videoTracks = localStream.getVideoTracks();

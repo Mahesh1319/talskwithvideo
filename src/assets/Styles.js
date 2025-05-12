@@ -1,7 +1,7 @@
 import { StyleSheet } from "react-native";
 import Colours from "./Colours";
 
-
+//Here we declares the styles of the screens seperatly
 const Styles = StyleSheet.create({
     container: {
         flex: 1,

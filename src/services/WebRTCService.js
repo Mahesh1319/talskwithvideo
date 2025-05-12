@@ -13,6 +13,9 @@ const iceServers = [
     // Add TURN servers here if needed
 ];
 
+
+//This is the very important file of our application
+
 class WebRTCService {
     constructor() {
         this.pc = null;
@@ -23,6 +26,8 @@ class WebRTCService {
         this.pendingIceCandidates = [];
         this.isSettingRemoteDescription = false;
     }
+
+    //This function is to initialize our call
 
     initialize = async (callId, isCaller) => {
         try {
@@ -87,6 +92,7 @@ class WebRTCService {
         }
     };
 
+    //this on to create the call
     createOffer = async () => {
         try {
             const offer = await this.pc.createOffer({
@@ -102,6 +108,7 @@ class WebRTCService {
         }
     };
 
+    //this on is to answer the call
     createAnswer = async () => {
         try {
             const answer = await this.pc.createAnswer({
@@ -117,6 +124,7 @@ class WebRTCService {
         }
     };
 
+    
     setRemoteDescription = async (desc) => {
         if (this.isSettingRemoteDescription) return;
         this.isSettingRemoteDescription = true;
@@ -172,6 +180,7 @@ class WebRTCService {
         }
     };
 
+    //function to switch the camera
     switchCamera = async (isFront) => {
         try {
             if (!this.localStream) return;
@@ -212,6 +221,7 @@ class WebRTCService {
         }
     };
 
+    //function to triiger remote stream
     onRemoteStream = (callback) => {
         this.remoteStreamListeners.push(callback);
         if (this.remoteStream) {
@@ -233,6 +243,7 @@ class WebRTCService {
         });
     };
 
+    //clean up after the call end
     cleanup = () => {
         try {
             console.log('Cleaning up WebRTC resources');

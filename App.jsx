@@ -20,7 +20,7 @@ const App = () => {
       console.log("signInAnonymously restricted in fire base--->:", err);
     }
   };
-  checkAuth();
+  checkAuth(); //check the current authentication
 }, []);
 
 

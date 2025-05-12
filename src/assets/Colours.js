@@ -1,3 +1,5 @@
+
+//Here we declare the colours cmmmonly
 const Colours = {
     primary: '#5715ad',
     lite_background:'#edeef5',

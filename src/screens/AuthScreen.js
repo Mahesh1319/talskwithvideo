@@ -14,52 +14,6 @@ const AuthScreen = () => {
     const [isLogin, setIsLogin] = useState(true);
     const [error, setError] = useState('');
 
-    //   const handleAuth = async () => {
-    //     console.log("email",email);
-    //     console.log("password",password);
-    //     try {
-    //       if (isLogin) {
-    //         await auth().signInWithEmailAndPassword(email, password);
-    //       } else {
-    //         await auth().createUserWithEmailAndPassword(email, password);
-    //       }
-    //     } catch (err) {
-    //         console.log("error",err);
-    //       setError(err.message);
-    //     }
-    //   };
-
-    // const handleAuth = async () => {
-    //     try {
-    //         let userCredential;
-    //         if (isLogin) {
-    //             userCredential = await auth().signInWithEmailAndPassword(email, password);
-    //         } else {
-    //             userCredential = await auth().createUserWithEmailAndPassword(email, password);
-    //             // Create user document after signup
-    //             await createUserDocument(userCredential.user);
-    //         }
-    //         console.log("User authenticated:", userCredential.user.uid);
-    //     } catch (err) {
-    //         setError(err.message);
-    //     }
-    // };
-
-
-    // // Define this outside the component (helper function)
-    // const createUserDocument = async (user) => {
-    //     console.log("Creating user document:", user.uid, user.email);
-    //       console.log("Creating user time---->:", Date.now());
-    //     //console.log("Creating user time---->:", firestore.FieldValue.serverTimestamp());
-    //     await firestore()
-    //         .collection('users')
-    //         .doc(user.uid)
-    //         .set({
-    //             uid: user.uid,
-    //             email: user.email,
-    //             createdAt: Date.now(),
-    //         });
-    // };
 
     const createUserDocument = async (user) => {
         try {
@@ -131,7 +85,7 @@ const AuthScreen = () => {
 
         try {
             let userCredential;
-            if (isLogin) {
+            if (isLogin) { //Check the user is alreary registered or not
                 userCredential = await auth().signInWithEmailAndPassword(email, password);
             } else {
                 userCredential = await auth().createUserWithEmailAndPassword(email, password);

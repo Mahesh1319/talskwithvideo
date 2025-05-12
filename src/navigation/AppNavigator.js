@@ -12,6 +12,7 @@ const Stack = createNativeStackNavigator();
 const AppNavigator = () => {
   const { user } = useAuth();
 
+  //here we implement the screen navigation functionality
   return (
     <NavigationContainer>
       <Stack.Navigator>

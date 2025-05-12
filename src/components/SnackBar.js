@@ -3,6 +3,7 @@ import { Animated, Text, StyleSheet, Dimensions, TouchableOpacity, View } from '
 
 const { width } = Dimensions.get('window');
 
+//here we create a Custom Snackbar
 const Snackbar = ({ visible, message, onDismiss, duration = 3000 }) => {
   const slideAnim = useRef(new Animated.Value(100)).current;
 

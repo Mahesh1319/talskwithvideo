@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { RTCView } from 'react-native-webrtc';
 
+
+//Custom component for Stream View
 const StreamView = ({ stream, label, isLocal }) => {
   if (!stream) return null;
 
