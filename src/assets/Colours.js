@@ -3,7 +3,7 @@ const Colours = {
     lite_background:'#edeef5',
     containerBorderColour:'#d8dbf2',
     placeHolderText:'#a5acd9',
-    secondary: '#2e2e2e',
+    secondary: '#1aa328',
     tertiary: '#3e3e3e',
     black:'black',
     white:'white',

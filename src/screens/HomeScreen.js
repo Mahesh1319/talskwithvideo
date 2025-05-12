@@ -1,5 +1,3 @@
-//HomeScreen.js
-
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator, Alert, Clipboard, Modal, Image } from 'react-native';
 import { auth, firestore } from '../services/firebase';
@@ -19,7 +17,7 @@ const HomeScreen = ({ navigation }) => {
     const [incomingCallVisible, setIncomingCallVisible] = useState(false);
     const [incomingCallData, setIncomingCallData] = useState(null);
     const [incomingCallId, setIncomingCallId] = useState(null);
-
+    const [isCallInitiator, setIsCallInitiator] = useState(false);
 
     useEffect(() => {
         fetchUsers();
@@ -77,35 +75,6 @@ const HomeScreen = ({ navigation }) => {
         }
     };
 
-    // useEffect(() => {
-    //     const currentUser = auth().currentUser;
-    //     if (!currentUser) return;
-
-    //     // Listen for calls where current user is the callee
-    //     const unsubscribe = firestore()
-    //         .collection('calls')
-    //         .where('calleeId', '==', currentUser.uid)
-    //         .where('status', '==', 'calling')
-    //         .onSnapshot(
-    //             (snapshot) => {
-    //                 if (!snapshot) return;
-    //                 snapshot.docChanges().forEach((change) => {
-    //                     if (change.type === 'added') {
-    //                         const callData = change.doc.data();
-    //                         showIncomingCallAlert(change.doc.id, callData);
-    //                     }
-    //                 });
-    //             },
-    //             (error) => {
-    //                 console.error('Error listening for calls:', error);
-    //                 setError(error.message);
-    //             }
-    //         );
-
-
-    //     return () => unsubscribe();
-    // }, []);
-
     useEffect(() => {
         const currentUser = auth().currentUser;
         if (!currentUser) return;
@@ -134,25 +103,6 @@ const HomeScreen = ({ navigation }) => {
         return () => unsubscribe();
     }, []);
 
-    // const showIncomingCallAlert = (callId, callData) => {
-    //     Alert.alert(
-    //         'Incoming Video Call',
-    //         `Call from ${callData.callerEmail || 'Unknown caller'}`,
-    //         [
-    //             {
-    //                 text: 'Reject',
-    //                 onPress: () => rejectCall(callId),
-    //                 style: 'destructive'
-    //             },
-    //             {
-    //                 text: 'Accept',
-    //                 onPress: () => acceptCall(callId, callData)
-    //             }
-    //         ],
-    //         { cancelable: false }
-    //     );
-    // };
-
     const showIncomingCallAlert = (callId, callData) => {
         setIncomingCallId(callId);
         setIncomingCallData(callData);
@@ -173,7 +123,6 @@ const HomeScreen = ({ navigation }) => {
         setIncomingCallVisible(false);
     };
 
-
     const rejectCall = async (callId) => {
         try {
             await firestore()
@@ -183,7 +132,6 @@ const HomeScreen = ({ navigation }) => {
                     status: 'rejected',
                     updatedAt: firestore.FieldValue.serverTimestamp()
                 });
-            //Alert.alert('Call rejected');
             Snackbar.show({
                 text: 'Call Rejected',
                 duration: Snackbar.LENGTH_SHORT,
@@ -214,7 +162,8 @@ const HomeScreen = ({ navigation }) => {
                 callerId: callData.callerId,
                 calleeId: auth().currentUser.uid,
                 isCaller: false,
-                callerEmail: callData.callerEmail
+                callerEmail: callData.callerEmail,
+                calleeEmail: auth().currentUser.email
             });
         } catch (err) {
             console.error('Error accepting call:', err);
@@ -222,119 +171,8 @@ const HomeScreen = ({ navigation }) => {
         }
     };
 
-    // const startCall = async (calleeId, calleeEmail) => {
-    //     console.log('Start call called--->:', calleeId, calleeEmail);
-    //     try {
-    //         const callerId = auth().currentUser.uid;
-    //         const callerEmail = auth().currentUser.email;
-    //         const callDoc = firestore().collection('calls').doc();
-
-    //         await callDoc.set({
-    //             callerId,
-    //             callerEmail,
-    //             calleeId,
-    //             calleeEmail,
-    //             callId: callDoc.id,
-    //             status: 'calling',
-    //             participants: [callerId, calleeId],
-    //             iceCandidates: [],
-    //             createdAt: firestore.FieldValue.serverTimestamp()
-    //         });
-
-    //         navigation.navigate('Call', {
-    //             callId: callDoc.id,
-    //             callerId,
-    //             calleeId,
-    //             isCaller: true,
-    //             calleeEmail
-    //         });
-    //     } catch (err) {
-    //         console.error('Call failed:', err);
-    //         Alert.alert('Error', 'Failed to start call: ' + err.message);
-    //     }
-    // };
-
-
-    //     const startCall = async (calleeId, calleeEmail) => {
-    //     console.log('Start call called with:', { calleeId, calleeEmail });
-    //     try {
-    //         const caller = auth().currentUser;
-    //         if (!caller) {
-    //             throw new Error('User not authenticated');
-    //         }
-
-    //         const callDocRef = firestore().collection('calls').doc();
-    //         const callId = callDocRef.id;
-
-    //         const callData = {
-    //             callerId: caller.uid,
-    //             callerEmail: caller.email,
-    //             calleeId,
-    //             calleeEmail,
-    //             callId,
-    //             status: 'calling',
-    //             participants: [caller.uid, calleeId],
-    //             iceCandidates: [],
-    //             createdAt: firestore.FieldValue.serverTimestamp(),
-    //             updatedAt: firestore.FieldValue.serverTimestamp()
-    //         };
-
-    //         console.log('Creating call document:', callData);
-    //         await callDocRef.set(callData);
-
-    //         console.log('Navigating to CallScreen with:', {
-    //             callId,
-    //             isCaller: true,
-    //             callerEmail: caller.email,
-    //             calleeEmail
-    //         });
-
-    //         navigation.navigate('Call', {
-    //             callId,
-    //             isCaller: true,
-    //             callerEmail: caller.email,
-    //             calleeEmail
-    //         });
-
-    //     } catch (err) {
-    //         console.error('Call failed:', err);
-    //         Alert.alert('Error', 'Failed to start call: ' + err.message);
-    //     }
-    // };
-    // Start call function
-    const startCall = async (calleeId, calleeEmail) => {
-        try {
-            const caller = auth().currentUser;
-            if (!caller) throw new Error("Not authenticated");
-
-            const callDocRef = firestore().collection('calls').doc();
-            const callData = {
-                callerId: caller.uid,
-                callerEmail: caller.email,
-                calleeId,
-                calleeEmail,
-                callId: callDocRef.id,
-                status: 'calling',
-                participants: [caller.uid, calleeId],
-                createdAt: firestore.FieldValue.serverTimestamp()
-            };
-
-            await callDocRef.set(callData);
-
-            navigation.navigate('Call', {
-                callId: callDocRef.id,
-                isCaller: true,
-                callerEmail: caller.email,
-                calleeEmail
-            });
-        } catch (err) {
-            console.error("Call start error:", err);
-            Alert.alert('Error', 'Failed to start call');
-        }
-    };
-    const joinCall = async () => {
+    const initiateCall = async () => {
         if (!callId.trim()) {
-            //Alert.alert('Error', 'Please enter a call ID');
             Snackbar.show({
                 text: 'Please enter a call ID',
                 duration: Snackbar.LENGTH_SHORT,
@@ -346,39 +184,82 @@ const HomeScreen = ({ navigation }) => {
         }
 
         try {
+            const currentUser = auth().currentUser;
+            if (!currentUser) throw new Error("Not authenticated");
+
+            // Check if call already exists
             const callDoc = await firestore().collection('calls').doc(callId).get();
-            if (!callDoc.exists) {
-                throw new Error('Call not found');
-            }
 
-            const callData = callDoc.data();
-            if (callData.status === 'ended') {
-                throw new Error('This call has already ended');
-            }
+            if (callDoc.exists) {
+                const callData = callDoc.data();
+            
+                if (!callData) {
+                    throw new Error('Call data is undefined');
+                }
+            
+                if (callData.status === 'ended') {
+                    throw new Error('This call has already ended');
+                }
+            
+                if (callData.callerId === currentUser.uid) {
+                    throw new Error('You cannot join your own call as a participant');
+                }
+            
+                navigation.navigate('Call', {
+                    callId,
+                    callerId: callData.callerId,
+                    calleeId: currentUser.uid,
+                    isCaller: false,
+                    callerEmail: callData.callerEmail,
+                    calleeEmail: currentUser.email
+                });
+            }  else {
+                // Create new call
+                const callDocRef = firestore().collection('calls').doc(callId);
+                const callData = {
+                    callerId: currentUser.uid,
+                    callerEmail: currentUser.email,
+                    callId: callId,
+                    status: 'waiting',
+                    createdAt: firestore.FieldValue.serverTimestamp(),
+                    updatedAt: firestore.FieldValue.serverTimestamp()
+                };
 
-            navigation.navigate('Call', {
-                callId,
-                callerId: callData.callerId,
-                calleeId: auth().currentUser.uid,
-                isCaller: false,
-                callerEmail: callData.callerEmail
-            });
+                await callDocRef.set(callData);
+                setIsCallInitiator(true);
+
+                // Navigate to call screen as initiator
+                navigation.navigate('Call', {
+                    callId,
+                    isCaller: true,
+                    callerEmail: currentUser.email,
+                    calleeEmail: '' // Will be filled when someone joins
+                });
+            }
         } catch (err) {
-            Alert.alert('Error', err.message);
+            console.log("Call initiation error:", err);
+            Snackbar.show({
+                text: 'Call initiation error:'+err,
+                duration: Snackbar.LENGTH_SHORT,
+                backgroundColor: Colours.snackBar,
+                textColor: Colours.white,
+                marginBottom: 10
+            });
         }
     };
 
     const copyCallId = () => {
-        //if (!callId.trim()) return;
-        Clipboard.setString(auth().currentUser?.uid);
+        const currentUserId = auth().currentUser?.uid;
+        if (!currentUserId) return;
+        
+        Clipboard.setString(currentUserId);
         Snackbar.show({
-            text: 'Call ID copied to clipboard',
+            text: 'Your ID copied to clipboard',
             duration: Snackbar.LENGTH_SHORT,
-            backgroundColor: Colours.snackBar,
+            backgroundColor: Colours.secondary,
             textColor: Colours.white,
             marginBottom: 10
         });
-        // Alert.alert('Copied!', 'Call ID copied to clipboard');
     };
 
     const pasteCallId = async () => {
@@ -404,7 +285,6 @@ const HomeScreen = ({ navigation }) => {
     const handleSignOut = async () => {
         try {
             await auth().signOut();
-            //navigation.navigate('Auth');
         } catch (err) {
             console.error("Sign out error:", err);
             setError(err.message);
@@ -441,7 +321,6 @@ const HomeScreen = ({ navigation }) => {
     }
 
     const renderIncomingCall = () => (
-
         <Modal
             visible={incomingCallVisible}
             transparent
@@ -468,8 +347,7 @@ const HomeScreen = ({ navigation }) => {
                 </View>
             </View>
         </Modal>
-    )
-
+    );
 
     return (
         <View style={Styles.container}>
@@ -487,19 +365,19 @@ const HomeScreen = ({ navigation }) => {
                 <View style={Styles.callIdButtons}>
                     <TouchableOpacity style={Styles.smallButton} onPress={copyCallId}>
                         <Icon name="copy" size={16} color={Colours.white} />
-                        <Text style={Styles.smallText}>Copy</Text>
+                        <Text style={Styles.smallText}>Copy ID</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={Styles.smallButton} onPress={pasteCallId}>
                         <Icon name="paste" size={16} color={Colours.white} />
-                        <Text style={Styles.smallText}>paste</Text>
+                        <Text style={Styles.smallText}>Paste</Text>
                     </TouchableOpacity>
                 </View>
                 <TouchableOpacity
                     style={Styles.joinButton}
-                    onPress={joinCall}
+                    onPress={initiateCall}
                     disabled={loading}
                 >
-                    <Text style={Styles.buttonText}>Join Call</Text>
+                    <Text style={Styles.buttonText}>{isCallInitiator ? 'Start Call' : 'Join Call'}</Text>
                 </TouchableOpacity>
             </View>
 
@@ -514,7 +392,10 @@ const HomeScreen = ({ navigation }) => {
                     renderItem={({ item }) => (
                         <TouchableOpacity
                             style={Styles.userItem}
-                            onPress={() => startCall(item.uid, item.email)}
+                            onPress={() => {
+                                setCallId(item.uid);
+                                initiateCall();
+                            }}
                             disabled={loading}
                         >
                             <Icon name="user" size={20} color={Colours.primary} style={Styles.userIcon} />
@@ -536,7 +417,5 @@ const HomeScreen = ({ navigation }) => {
         </View>
     );
 };
-
-
 
 export default HomeScreen;
