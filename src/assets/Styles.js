@@ -234,7 +234,43 @@ const Styles = StyleSheet.create({
         fontWeight: 'bold',
         //paddingHorizontal: 5,
         bottom:-6
-    }
+    },
+    /////////
+    ///////
+    inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+},
+sectionLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colours.text,
+    marginBottom: 8,
+},
+copyButton: {
+    backgroundColor: Colours.primary,
+    padding: 12,
+    borderRadius: 5,
+    marginLeft: 5,
+    justifyContent: 'center',
+    alignItems: 'center',
+},
+pasteButton: {
+    backgroundColor: Colours.secondary,
+    padding: 12,
+    borderRadius: 5,
+    marginLeft: 5,
+    justifyContent: 'center',
+    alignItems: 'center',
+},
+createButton: {
+    backgroundColor: Colours.success,
+    padding: 15,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginTop: 5,
+},
 
 
 })

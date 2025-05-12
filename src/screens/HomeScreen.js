@@ -10,14 +10,15 @@ import Colours from '../assets/Colours';
 const HomeScreen = ({ navigation }) => {
     const [users, setUsers] = useState([]);
     const [callId, setCallId] = useState('');
+    const [myCallId, setMyCallId] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [clipboardContent, setClipboardContent] = useState('');
     const callIdInputRef = useRef(null);
+    const myCallIdInputRef = useRef(null);
     const [incomingCallVisible, setIncomingCallVisible] = useState(false);
     const [incomingCallData, setIncomingCallData] = useState(null);
     const [incomingCallId, setIncomingCallId] = useState(null);
-
 
     useEffect(() => {
         const fetchUsers = async () => {
@@ -28,6 +29,9 @@ const HomeScreen = ({ navigation }) => {
                     setLoading(false);
                     return;
                 }
+
+                // Set current user's UID as default call ID
+                setMyCallId(currentUser.uid);
 
                 const unsubscribe = firestore()
                     .collection('users')
@@ -100,28 +104,8 @@ const HomeScreen = ({ navigation }) => {
                 }
             );
 
-
         return () => unsubscribe();
     }, []);
-
-    // const showIncomingCallAlert = (callId, callData) => {
-    //     Alert.alert(
-    //         'Incoming Video Call',
-    //         `Call from ${callData.callerEmail || 'Unknown caller'}`,
-    //         [
-    //             {
-    //                 text: 'Reject',
-    //                 onPress: () => rejectCall(callId),
-    //                 style: 'destructive'
-    //             },
-    //             {
-    //                 text: 'Accept',
-    //                 onPress: () => acceptCall(callId, callData)
-    //             }
-    //         ],
-    //         { cancelable: false }
-    //     );
-    // };
 
     const showIncomingCallAlert = (callId, callData) => {
         setIncomingCallId(callId);
@@ -143,7 +127,6 @@ const HomeScreen = ({ navigation }) => {
         setIncomingCallVisible(false);
     };
 
-
     const rejectCall = async (callId) => {
         try {
             await firestore()
@@ -153,8 +136,7 @@ const HomeScreen = ({ navigation }) => {
                     status: 'rejected',
                     updatedAt: firestore.FieldValue.serverTimestamp()
                 });
-            //Alert.alert('Call rejected');
-                Snackbar.show({
+            Snackbar.show({
                 text: 'Call Rejected',
                 duration: Snackbar.LENGTH_SHORT,
                 backgroundColor: Colours.snackBar,
@@ -184,7 +166,9 @@ const HomeScreen = ({ navigation }) => {
                 callerId: callData.callerId,
                 calleeId: auth().currentUser.uid,
                 isCaller: false,
-                callerEmail: callData.callerEmail
+                callerEmail: callData.callerEmail,
+                isGroupCall: callData.isGroupCall || false,
+                participants: callData.participants || []
             });
         } catch (err) {
             console.error('Error accepting call:', err);
@@ -192,6 +176,7 @@ const HomeScreen = ({ navigation }) => {
         }
     };
 
+    // Existing one-to-one call function
     const startCall = async (calleeId, calleeEmail) => {
         try {
             const callerId = auth().currentUser.uid;
@@ -207,7 +192,8 @@ const HomeScreen = ({ navigation }) => {
                 status: 'calling',
                 participants: [callerId, calleeId],
                 iceCandidates: [],
-                createdAt: firestore.FieldValue.serverTimestamp()
+                createdAt: firestore.FieldValue.serverTimestamp(),
+                isGroupCall: false
             });
 
             navigation.navigate('Call', {
@@ -215,7 +201,9 @@ const HomeScreen = ({ navigation }) => {
                 callerId,
                 calleeId,
                 isCaller: true,
-                calleeEmail
+                calleeEmail,
+                isGroupCall: false,
+                participants: [callerId, calleeId]
             });
         } catch (err) {
             console.error('Call failed:', err);
@@ -223,9 +211,57 @@ const HomeScreen = ({ navigation }) => {
         }
     };
 
-    const joinCall = async () => {
+    // New function to create a group call
+    const createGroupCall = async () => {
+        try {
+            const currentUser = auth().currentUser;
+            if (!currentUser) {
+                throw new Error('Not authenticated');
+            }
+
+            const callDoc = firestore().collection('calls').doc(myCallId);
+
+            await callDoc.set({
+                callerId: currentUser.uid,
+                callerEmail: currentUser.email,
+                callId: myCallId,
+                status: 'waiting',
+                participants: [currentUser.uid],
+                iceCandidates: [],
+                createdAt: firestore.FieldValue.serverTimestamp(),
+                isGroupCall: true
+            });
+
+            Snackbar.show({
+                text: 'Group call created. Share your call ID with others.',
+                duration: Snackbar.LENGTH_LONG,
+                backgroundColor: Colours.snackBar,
+                textColor: Colours.white,
+                marginBottom: 10
+            });
+
+            navigation.navigate('Call', {
+                callId: myCallId,
+                callerId: currentUser.uid,
+                isCaller: true,
+                isGroupCall: true,
+                participants: [currentUser.uid]
+            });
+        } catch (err) {
+            console.error('Failed to create group call:', err);
+            Snackbar.show({
+                text: 'Failed to create call: ' + err.message,
+                duration: Snackbar.LENGTH_SHORT,
+                backgroundColor: Colours.snackBar,
+                textColor: Colours.white,
+                marginBottom: 10
+            });
+        }
+    };
+
+    // New function to join a group call
+    const joinGroupCall = async () => {
         if (!callId.trim()) {
-            //Alert.alert('Error', 'Please enter a call ID');
             Snackbar.show({
                 text: 'Please enter a call ID',
                 duration: Snackbar.LENGTH_SHORT,
@@ -237,21 +273,36 @@ const HomeScreen = ({ navigation }) => {
         }
 
         try {
-            const callDoc = await firestore().collection('calls').doc(callId).get();
-            if (!callDoc.exists) {
+            const currentUser = auth().currentUser;
+            if (!currentUser) {
+                throw new Error('Not authenticated');
+            }
+
+            const callDoc = firestore().collection('calls').doc(callId);
+            const callSnapshot = await callDoc.get();
+
+            if (!callSnapshot.exists) {
                 throw new Error('Call not found');
             }
 
-            const callData = callDoc.data();
+            const callData = callSnapshot.data();
+
             if (callData.status === 'ended') {
                 throw new Error('This call has already ended');
             }
 
+            // Add current user to participants list
+            await callDoc.update({
+                participants: firestore.FieldValue.arrayUnion(currentUser.uid),
+                updatedAt: firestore.FieldValue.serverTimestamp()
+            });
+
             navigation.navigate('Call', {
                 callId,
                 callerId: callData.callerId,
-                calleeId: auth().currentUser.uid,
                 isCaller: false,
+                isGroupCall: true,
+                participants: [...callData.participants, currentUser.uid],
                 callerEmail: callData.callerEmail
             });
         } catch (err) {
@@ -262,21 +313,18 @@ const HomeScreen = ({ navigation }) => {
                 textColor: Colours.white,
                 marginBottom: 10
             });
-            //Alert.alert('Error', err.message);
         }
     };
 
-    const copyCallId = () => {
-        //if (!callId.trim()) return;
-        Clipboard.setString(auth().currentUser?.uid);
-         Snackbar.show({
-                text: 'Call ID copied to clipboard',
-                duration: Snackbar.LENGTH_SHORT,
-                backgroundColor: Colours.snackBar,
-                textColor: Colours.white,
-                marginBottom: 10
-            });
-        // Alert.alert('Copied!', 'Call ID copied to clipboard');
+    const copyMyCallId = () => {
+        Clipboard.setString(myCallId);
+        Snackbar.show({
+            text: 'Call ID copied to clipboard',
+            duration: Snackbar.LENGTH_SHORT,
+            backgroundColor: Colours.snackBar,
+            textColor: Colours.white,
+            marginBottom: 10
+        });
     };
 
     const pasteCallId = async () => {
@@ -302,7 +350,6 @@ const HomeScreen = ({ navigation }) => {
     const handleSignOut = async () => {
         try {
             await auth().signOut();
-            //navigation.navigate('Auth');
         } catch (err) {
             console.error("Sign out error:", err);
             setError(err.message);
@@ -339,7 +386,6 @@ const HomeScreen = ({ navigation }) => {
     }
 
     const renderIncomingCall = () => (
-
         <Modal
             visible={incomingCallVisible}
             transparent
@@ -366,38 +412,65 @@ const HomeScreen = ({ navigation }) => {
                 </View>
             </View>
         </Modal>
-    )
-
+    );
 
     return (
         <View style={Styles.container}>
             <Text style={Styles.title}>Welcome, {auth().currentUser?.email}</Text>
 
-            <View style={Styles.callContainer}>
-                <TextInput
-                    ref={callIdInputRef}
-                    style={[Styles.inputContainer, { flex: 1, height: 50, alignSelf: 'center' }]}
-                    placeholder="Enter Call ID"
-                    value={callId}
-                    onChangeText={setCallId}
-                    placeholderTextColor="#999"
-                />
-                <View style={Styles.callIdButtons}>
-                    <TouchableOpacity style={Styles.smallButton} onPress={copyCallId}>
+            {/* My Call ID Section */}
+            <View style={[Styles.callContainer,{flexDirection:'column'}]}>
+                <Text style={Styles.sectionLabel}>Your Call ID:</Text>
+                <View style={Styles.inputRow}>
+                    <TextInput
+                        ref={myCallIdInputRef}
+                        style={[Styles.inputContainer, { flex: 1 }]}
+                        value={myCallId}
+                        onChangeText={setMyCallId}
+                        placeholderTextColor="#999"
+                        editable={false}
+                    />
+                    <TouchableOpacity 
+                        style={Styles.copyButton} 
+                        onPress={copyMyCallId}
+                    >
                         <Icon name="copy" size={16} color={Colours.white} />
-                        <Text style={Styles.smallText}>Copy</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={Styles.smallButton} onPress={pasteCallId}>
-                        <Icon name="paste" size={16} color={Colours.white} />
-                        <Text  style={Styles.smallText}>paste</Text>
                     </TouchableOpacity>
                 </View>
                 <TouchableOpacity
                     style={Styles.joinButton}
-                    onPress={joinCall}
+                    onPress={createGroupCall}
                     disabled={loading}
                 >
-                    <Text style={Styles.buttonText}>Join Call</Text>
+                    <Text style={Styles.buttonText}>Create Group Call</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* Join Call Section */}
+             <View style={[Styles.callContainer,{flexDirection:'column'}]}>
+                <Text style={Styles.sectionLabel}>Join a Call:</Text>
+                <View style={Styles.inputRow}>
+                    <TextInput
+                        ref={callIdInputRef}
+                        style={[Styles.inputContainer, { flex: 1 }]}
+                        placeholder="Enter Call ID"
+                        value={callId}
+                        onChangeText={setCallId}
+                        placeholderTextColor="#999"
+                    />
+                    <TouchableOpacity 
+                        style={Styles.copyButton} 
+                        onPress={pasteCallId}
+                    >
+                        <Icon name="paste" size={16} color={Colours.white} />
+                    </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                    style={Styles.joinButton}
+                    onPress={joinGroupCall}
+                    disabled={loading}
+                >
+                    <Text style={Styles.buttonText}>Join Group Call</Text>
                 </TouchableOpacity>
             </View>
 
@@ -434,7 +507,5 @@ const HomeScreen = ({ navigation }) => {
         </View>
     );
 };
-
-
 
 export default HomeScreen;
