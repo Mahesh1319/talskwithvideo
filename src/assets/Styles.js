@@ -52,11 +52,7 @@ const Styles = StyleSheet.create({
         marginTop: 10,
         borderRadius: 10
     },
-    buttonText: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 16,
-    },
+
     switchText: {
         marginTop: 20,
         textAlign: 'center',
@@ -137,10 +133,6 @@ const Styles = StyleSheet.create({
     },
     callIcon: {
         marginLeft: 10,
-    },
-    buttonText: {
-        color: 'white',
-        fontWeight: 'bold',
     },
     logoutButton: {
         backgroundColor: Colours.logout,
